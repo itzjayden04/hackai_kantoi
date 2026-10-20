@@ -1,0 +1,104 @@
+name: Build Kantoi
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: '3.47.7'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build apk --release --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+      - run: cp build/app/outputs/flutter-apk/app-release.apk ../Kantoi-android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kantoi-android
+          path: Kantoi-android.apk
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build windows --release --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+      - name: Package
+        shell: pwsh
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath ../Kantoi-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kantoi-windows
+          path: Kantoi-windows.zip
+
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cd extension && zip -r ../Kantoi-extension.zip . -x '*.md'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kantoi-extension
+          path: Kantoi-extension.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [android, windows, extension]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            Kantoi-android.apk
+            Kantoi-windows.zip
+            Kantoi-extension.zip

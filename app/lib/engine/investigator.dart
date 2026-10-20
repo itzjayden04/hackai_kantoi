@@ -217,7 +217,7 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
   final headline = (ai?['summary'] as String?)?.trim().isNotEmpty == true
       ? ai!['summary'] as String
       : switch (level) {
-          RiskLevel.danger => 'This looks like a ${scamType.toLowerCase()}. ${top.take(2).map((x) => x.title).join(' and ')}.',
+          RiskLevel.danger => 'This looks like a $scamType. ${_sentence(top.map((x) => x.title).toSet().take(2).toList())}.',
           RiskLevel.suspicious => 'This has several warning signs: ${top.take(3).map((x) => x.title.toLowerCase()).join(', ')}.',
           RiskLevel.caution => 'Mostly fine, but check this: ${top.isEmpty ? 'nothing major' : top.first.title.toLowerCase()}.',
           RiskLevel.safe => 'No warning signs found.',
@@ -247,6 +247,12 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
     whatWouldChange: change.take(2).toList(),
     notChecked: notChecked,
   );
+}
+
+String _sentence(List<String> parts) {
+  if (parts.isEmpty) return 'Several warning signs';
+  final rest = parts.skip(1).map((p) => p[0].toLowerCase() + p.substring(1));
+  return [parts.first, ...rest].join(', and ');
 }
 
 String _guessType(Map<CueCategory, int> c, List<UrlReport> urls) {
