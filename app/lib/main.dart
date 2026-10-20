@@ -5,6 +5,8 @@ import 'engine/models.dart';
 import 'state.dart';
 import 'ui/check_page.dart';
 import 'ui/emergency_page.dart';
+import 'ui/intel_page.dart';
+import 'ui/learn_page.dart';
 import 'ui/live_page.dart';
 import 'ui/relationship_page.dart';
 import 'ui/result_view.dart';
@@ -42,11 +44,14 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> {
   int _tab = 0;
   int _seenLive = 0;
+  static const _paidTab = 5;
 
   static const _dests = [
     (Icons.search_rounded, 'Check'),
     (Icons.favorite_border_rounded, 'Relationship'),
     (Icons.shield_outlined, 'Live'),
+    (Icons.hub_outlined, 'Scam map'),
+    (Icons.school_outlined, 'Learn'),
     (Icons.emergency_outlined, 'I already paid'),
     (Icons.settings_outlined, 'Settings'),
   ];
@@ -86,7 +91,9 @@ class _ShellState extends State<Shell> {
         0 => const CheckPage(),
         1 => const RelationshipPage(),
         2 => const LivePage(),
-        3 => const EmergencyPage(embedded: true),
+        3 => const IntelPage(),
+        4 => const LearnPage(),
+        5 => const EmergencyPage(embedded: true),
         _ => const SettingsPage(),
       };
 
@@ -95,7 +102,7 @@ class _ShellState extends State<Shell> {
     final wide = MediaQuery.sizeOf(context).width >= 760;
     final liveBadge = appState.live.where((i) => i.investigation.verdict.level.index >= RiskLevel.suspicious.index).length;
     Widget icon(int i) {
-      final ic = Icon(_dests[i].$1, color: i == 3 ? const Color(0xFFDC2626) : null);
+      final ic = Icon(_dests[i].$1, color: i == _paidTab ? const Color(0xFFDC2626) : null);
       return i == 2 && liveBadge > 0 ? Badge(label: Text('$liveBadge'), child: ic) : ic;
     }
 
@@ -117,14 +124,23 @@ class _ShellState extends State<Shell> {
         ]),
       );
     }
+    // Phones get the five most-used tabs at the bottom; Live (desktop
+    // extension) and Settings move to the top bar.
+    const bottom = [0, 1, 3, 4, _paidTab];
+    final sel = bottom.indexOf(_tab);
     return Scaffold(
-      appBar: AppBar(title: const _Logo(), centerTitle: false),
+      appBar: AppBar(title: const _Logo(), centerTitle: false, actions: [
+        if (appState.extensionConnected || appState.live.isNotEmpty)
+          IconButton(tooltip: 'Live', onPressed: () => setState(() => _tab = 2), icon: icon(2)),
+        IconButton(tooltip: 'Settings', onPressed: () => setState(() => _tab = 6), icon: Icon(_dests[6].$1)),
+      ]),
       body: body,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
+        selectedIndex: sel < 0 ? 0 : sel,
+        indicatorColor: sel < 0 ? Colors.transparent : null,
+        onDestinationSelected: (i) => setState(() => _tab = bottom[i]),
         destinations: [
-          for (var i = 0; i < _dests.length; i++) NavigationDestination(icon: icon(i), label: _dests[i].$2),
+          for (final i in bottom) NavigationDestination(icon: icon(i), label: _dests[i].$2),
         ],
       ),
     );
