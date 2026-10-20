@@ -1,3 +1,4 @@
+import 'cues_extra.dart';
 import 'models.dart';
 
 class _Rule {
@@ -163,6 +164,7 @@ List<Finding> detectCues(String text) {
       tool: 'Prompt-injection guard',
     ));
   }
+  out.addAll(detectExtraCues(text));
   return out;
 }
 
