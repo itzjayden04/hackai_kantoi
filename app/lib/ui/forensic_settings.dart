@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../engine/forensics/keys.dart';
-import 'theme.dart';
 
 /// Holds the text fields for the optional link-check keys, so the Settings
 /// page can save them with its own Save button.
@@ -54,7 +53,6 @@ class ForensicKeysSection extends StatelessWidget {
           ),
         );
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const SectionTitle('Link safety services (optional)'),
       Text(
           'With these free keys Kantoi also asks well-known safety lists about a link. Only the link is sent, never your message. '
           'Without a key, that check is skipped. Keys are stored only on this device.',

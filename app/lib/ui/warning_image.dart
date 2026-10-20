@@ -1,7 +1,5 @@
 import 'dart:ui' as ui;
 
-import 'package:file_selector/file_selector.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -156,12 +154,6 @@ Future<Uint8List?> capturePng(GlobalKey key, {double pixelRatio = 3}) async {
   return data?.buffer.asUint8List();
 }
 
-bool get _isDesktop =>
-    !kIsWeb &&
-    (defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.linux ||
-        defaultTargetPlatform == TargetPlatform.macOS);
-
 class WarningImagePage extends StatefulWidget {
   final WarningContent content;
   final String? text;
@@ -191,17 +183,6 @@ class _WarningImagePageState extends State<WarningImagePage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  Future<String?> _save(Uint8List png) async {
-    final loc = await getSaveLocation(
-      suggestedName: 'kantoi-scam-warning.png',
-      acceptedTypeGroups: const [XTypeGroup(label: 'Picture', extensions: ['png'])],
-    );
-    if (loc == null) return null;
-    final path = loc.path.toLowerCase().endsWith('.png') ? loc.path : '${loc.path}.png';
-    await XFile.fromData(png, mimeType: 'image/png').saveTo(path);
-    return 'Picture saved. Drag it into your family WhatsApp chat.';
   }
 
   Future<String?> _share(Uint8List png) async {
@@ -237,24 +218,11 @@ class _WarningImagePageState extends State<WarningImagePage> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              if (_isDesktop) ...[
-                FilledButton.icon(
-                  icon: const Icon(Icons.download_rounded),
-                  label: const Text('Save picture'),
-                  onPressed: _busy ? null : () => _run(_save),
-                ),
-                const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.share_rounded),
-                  label: const Text('Share'),
-                  onPressed: _busy ? null : () => _run(_share),
-                ),
-              ] else
-                FilledButton.icon(
-                  icon: const Icon(Icons.share_rounded),
-                  label: const Text('Share picture'),
-                  onPressed: _busy ? null : () => _run(_share),
-                ),
+              FilledButton.icon(
+                icon: const Icon(Icons.share_rounded),
+                label: const Text('Share picture'),
+                onPressed: _busy ? null : () => _run(_share),
+              ),
               const SizedBox(height: 10),
               TextButton.icon(
                 icon: const Icon(Icons.copy_rounded),

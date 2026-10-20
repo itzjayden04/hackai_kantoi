@@ -3,9 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
-/// Phones have no "Save as" dialog, so files go to the share sheet there
-/// (save to Files, Drive, WhatsApp or email). On a computer the first file is
-/// saved where the user chooses.
+/// Files go to the share sheet (save to Files, Drive, WhatsApp or email).
+/// The save dialog is only a fallback for running the app in tests or a
+/// debug build on a computer.
 bool get useShareSheet =>
     !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
 

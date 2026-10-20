@@ -18,15 +18,17 @@ class CaseStep {
 }
 
 const caseSteps = [
-  CaseStep('call997', 'Call 997 (National Scam Response Centre)', 'Every minute counts. They can work with banks to freeze the money.',
+  CaseStep('call997', 'Call 997 (National Scam Response Centre)', 'Every minute counts. NSRC works with the banks to trace and hold the money.',
       'Called 997', '997 not called yet'),
-  CaseStep('callBank', 'Call your bank', 'Use the number on the back of your card. Ask them to block your account and card.',
+  CaseStep('callBank', 'Call your bank and freeze your accounts', 'Use your bank\'s fraud line below or the number on the back of your card. Ask them to block your cards and online banking.',
       'Called bank', 'Bank not called yet'),
+  CaseStep('stop', 'Stop contact. Do not pay anything more', 'Block the scammer. Any "release fee", "tax" or "recovery service" is a second scam.',
+      'Contact stopped', 'Still in contact'),
   CaseStep('passwords', 'Change your passwords', 'Banking app first, then email. Log out of all other devices.',
       'Passwords changed', 'Passwords not changed yet'),
-  CaseStep('stop', 'Stop all contact with the scammer', 'Do not pay any "recovery fee". Recovery offers are a second scam.',
-      'Contact stopped', 'Still in contact'),
-  CaseStep('police', 'Make a police report within 24 hours', 'Your bank will ask for it. Kantoi prepares it for you.',
+  CaseStep('evidence', 'Keep the evidence', 'Do not delete the chat. Screenshot the messages, their number or profile, and your payment receipt.',
+      'Evidence kept', 'Evidence not saved yet'),
+  CaseStep('police', 'Make a police report within 24 hours', 'Your bank will ask for it. Kantoi fills in the report for you.',
       'Police report made', 'Police report pending'),
   CaseStep('platform', 'Report the account on the app they used', 'So it gets blocked before it reaches someone else.',
       'Account reported', 'Account not reported yet'),
