@@ -26,6 +26,8 @@ AI is built in. No account, API key or extra software is needed.
 
 1. Download `Kantoi-android.apk` on the phone and open it.
 2. Allow "Install unknown apps" for your browser when asked, then tap **Install**.
+3. To turn on phone protection, open Kantoi and tap the shield at the top. Turn on the switch, then allow **Notification access** and **Display over other apps** when Android asks. Turning on Kantoi under **Accessibility** is optional; it lets Kantoi check the chat you have open and pause you before a banking app.
+4. If Android says a setting is restricted, open **Settings > Apps > Kantoi**, tap the three dots at the top right, choose **Allow restricted settings**, and try again.
 
 ### Browser extension (WhatsApp Web and Telegram Web)
 
@@ -39,7 +41,7 @@ AI is built in. No account, API key or extra software is needed.
 
 Kantoi follows the eight branches of the product blueprint.
 
-1. **Bring anything in.** Paste a message, link or email (headers included), or add a screenshot, QR code, PDF, Word file, voice note, short video or Android app file. On Android, share straight from WhatsApp or scan a QR with the camera. Two big buttons let you choose "I'm not sure about this" or "I already paid". There is also a browser extension for WhatsApp Web and Telegram Web, and an optional Telegram bot.
+1. **Bring anything in.** Paste a message, link or email (headers included), or add a screenshot, QR code, PDF, Word file, voice note, short video or Android app file. On Android, share straight from WhatsApp or scan a QR with the camera. Two big buttons let you choose "I'm not sure about this" or "I already paid". There is also a browser extension for WhatsApp Web and Telegram Web, and an optional Telegram bot. On Android, phone protection checks new WhatsApp, Telegram and SMS messages as they arrive and shows a pause card on top of the chat when one looks like a scam. If you open a banking or e-wallet app soon after a risky chat, it pauses you again before you pay.
 2. **Investigate it.**
    - **Words:** pressure words are highlighted, including Malay, Manglish, Chinese and Tamil. Kantoi also catches disguised spelling and says which step of a known scam script the message has reached.
    - **Links:** every redirect is followed in a locked-down way, and each hop shows its domain age, certificate, hosting country, brand look-alike checks and the login form on the page. Kantoi also checks whether the page shows phone visitors something different, and looks the link up in safety lists.
