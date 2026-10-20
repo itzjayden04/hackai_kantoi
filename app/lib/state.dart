@@ -7,18 +7,6 @@ import 'engine/forensics/keys.dart';
 import 'engine/investigator.dart';
 import 'engine/llm.dart';
 import 'engine/models.dart';
-import 'engine/relationship.dart';
-
-/// One message the browser extension saw in WhatsApp Web or Telegram Web.
-class LiveItem {
-  final String chat;
-  final String sender;
-  final String text;
-  final DateTime at;
-  final Investigation investigation;
-  final RelationshipReport? conversation;
-  const LiveItem(this.chat, this.sender, this.text, this.at, this.investigation, this.conversation);
-}
 
 class AppState extends ChangeNotifier {
   LlmConfig llm = LlmConfig.defaults;
@@ -26,10 +14,19 @@ class AppState extends ChangeNotifier {
   /// Optional link reputation keys (built-in defaults, overridable in Settings).
   ForensicKeys keys = ForensicKeys.defaults;
   final List<Investigation> history = [];
-  final List<LiveItem> live = [];
-  bool extensionConnected = false;
-  DateTime? lastExtensionPing;
-  String? serverError;
+
+  /// Which bottom tab is showing (0 Check, 1 Trace, 2 Learn, 3 Emergency).
+  /// Any screen or a notification tap can switch tabs through this.
+  final tab = ValueNotifier<int>(0);
+
+  /// Something to trace as soon as the Trace tab opens (a link, number,
+  /// account or message), e.g. from a result screen or a notification tap.
+  final traceRequest = ValueNotifier<String?>(null);
+
+  void openTrace(String target) {
+    traceRequest.value = target;
+    tab.value = 1;
+  }
 
   /// Set by the shell so a live alert or a deep link can open a result.
   void Function(Investigation)? openResult;
@@ -81,18 +78,11 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addLive(LiveItem item) {
-    live.insert(0, item);
-    if (live.length > 100) live.removeLast();
-    notifyListeners();
-  }
-
   /// Drops checks and live items older than [cutoff] (data retention).
   void dropOlderThan(DateTime cutoff) {
-    final before = history.length + live.length;
+    final before = history.length;
     history.removeWhere((i) => i.artefact.receivedAt.isBefore(cutoff));
-    live.removeWhere((i) => i.at.isBefore(cutoff));
-    if (history.length + live.length != before) notifyListeners();
+    if (history.length != before) notifyListeners();
   }
 
   /// Forgets everything held in memory ("Delete all my Kantoi data"). The
@@ -101,21 +91,7 @@ class AppState extends ChangeNotifier {
     llm = LlmConfig.defaults;
     ownDetails = {};
     history.clear();
-    live.clear();
     notifyListeners();
-  }
-
-  void setServerError(String e) {
-    serverError = e;
-    notifyListeners();
-  }
-
-  void pingExtension() {
-    lastExtensionPing = DateTime.now();
-    if (!extensionConnected) {
-      extensionConnected = true;
-      notifyListeners();
-    }
   }
 }
 

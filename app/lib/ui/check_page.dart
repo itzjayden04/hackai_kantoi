@@ -1,5 +1,4 @@
 
-import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -155,16 +154,7 @@ class _CheckPageState extends State<CheckPage> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
-    return DropTarget(
-      onDragEntered: (_) => setState(() => _dragging = true),
-      onDragExited: (_) => setState(() => _dragging = false),
-      onDragDone: (d) async {
-        setState(() => _dragging = false);
-        if (d.files.isEmpty) return;
-        final f = d.files.first;
-        await _check(bytes: await f.readAsBytes(), name: f.name, mime: f.mimeType);
-      },
-      child: PageBody(children: [
+    return PageBody(children: [
         Text('Is this a scam?', style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
         const SizedBox(height: 12),
         TriageButtons(
@@ -258,8 +248,7 @@ class _CheckPageState extends State<CheckPage> {
               ),
           ],
         ],
-      ]),
-    );
+      ]);
   }
 }
 

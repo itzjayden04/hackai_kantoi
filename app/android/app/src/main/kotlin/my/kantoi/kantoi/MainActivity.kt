@@ -1,6 +1,9 @@
 package my.kantoi.kantoi
 
+import android.Manifest
 import android.content.ComponentName
+import android.content.pm.PackageManager
+import android.os.PowerManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -36,6 +39,10 @@ class MainActivity : FlutterActivity() {
                         "notifications" to listenerOn(),
                         "overlay" to (Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this)),
                         "accessibility" to accessibilityOn(),
+                        "postNotifications" to (Build.VERSION.SDK_INT < 33 ||
+                            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED),
+                        "battery" to (Build.VERSION.SDK_INT < 23 ||
+                            (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)),
                         "recent" to GuardEngine.recent(this),
                     ),
                 )
@@ -73,7 +80,15 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun openSetting(which: String?) {
+        if (which == "postNotifications") {
+            if (Build.VERSION.SDK_INT >= 33) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 41)
+            }
+            return
+        }
         val i = when (which) {
+            "battery" -> Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))
+            "appDetails" -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
             "notifications" -> Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
             "overlay" -> Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
             "accessibility" -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)

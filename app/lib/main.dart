@@ -1,6 +1,7 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
-import 'bridge/bridge.dart';
 import 'engine/models.dart';
 import 'guard/guard_background.dart';
 import 'guard/guard_control.dart';
@@ -12,20 +13,21 @@ import 'ui/case_tracker.dart';
 import 'ui/check_page.dart';
 import 'ui/emergency_page.dart';
 import 'ui/intel_page.dart';
+import 'ui/kit.dart';
 import 'ui/learn_page.dart';
-import 'ui/live_page.dart';
-import 'ui/relationship_page.dart';
+import 'ui/protection_page.dart';
 import 'ui/result_view.dart';
 import 'ui/settings_page.dart';
+import 'ui/setup_page.dart';
 import 'ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await appState.load();
   await localStore.load();
-  await startBridge();
   await startTelegramBot();
-  runApp(const KantoiApp());
+  final firstRun = guardSupported && !await setupSeen();
+  runApp(KantoiApp(firstRun: firstRun));
 }
 
 /// Entry point for Android phone protection, started by the native side
@@ -35,16 +37,28 @@ Future<void> guardMain() => runGuardBackground();
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
-class KantoiApp extends StatelessWidget {
-  const KantoiApp({super.key});
+class KantoiApp extends StatefulWidget {
+  final bool firstRun;
+  const KantoiApp({super.key, this.firstRun = false});
+  @override
+  State<KantoiApp> createState() => _KantoiAppState();
+}
+
+class _KantoiAppState extends State<KantoiApp> {
+  late bool _setup = widget.firstRun;
+
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'Kantoi',
         debugShowCheckedModeBanner: false,
         navigatorKey: navigatorKey,
         theme: buildTheme(Brightness.light),
-        darkTheme: buildTheme(Brightness.dark),
-        home: const Shell(),
+        // The design is light-first; dark mode follows later.
+        themeMode: ThemeMode.light,
+        home: AnimatedSwitcher(
+          duration: K.medium,
+          child: _setup ? SetupFlow(key: const ValueKey('setup'), onDone: () => setState(() => _setup = false)) : const Shell(),
+        ),
       );
 }
 
@@ -55,135 +69,227 @@ class Shell extends StatefulWidget {
 }
 
 class _ShellState extends State<Shell> {
-  int _tab = 0;
-  int _seenLive = 0;
-  static const _paidTab = 5;
-
-  static const _dests = [
-    (Icons.search_rounded, 'Check'),
-    (Icons.favorite_border_rounded, 'Relationship'),
-    (Icons.shield_outlined, 'Live'),
-    (Icons.hub_outlined, 'Scam map'),
-    (Icons.school_outlined, 'Learn'),
-    (Icons.emergency_outlined, 'I already paid'),
-    (Icons.settings_outlined, 'Settings'),
+  static const _tabs = [
+    (Icons.shield_outlined, Icons.shield_rounded, 'Check'),
+    (Icons.hub_outlined, Icons.hub_rounded, 'Trace'),
+    (Icons.school_outlined, Icons.school_rounded, 'Learn'),
+    (Icons.emergency_outlined, Icons.emergency_rounded, 'Emergency'),
   ];
+  // Tabs are built the first time they are opened, then kept alive so a
+  // running trace or check survives switching tabs.
+  final _built = <int>{0};
 
   @override
   void initState() {
     super.initState();
-    appState.openResult = (inv) => navigatorKey.currentState?.push(MaterialPageRoute(
-        builder: (_) => Scaffold(appBar: AppBar(title: const Text('Kantoi check')), body: _ResultPage(inv: inv))));
-    appState.addListener(_onState);
-    listenForShares(() => setState(() => _tab = 0));
+    appState.openResult = (inv) => navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => ResultScreen(inv: inv)));
+    appState.tab.addListener(_onTab);
+    listenForShares(() => appState.tab.value = 0);
   }
 
-  void _onState() {
-    // Pop a quiet banner when the extension flags something new.
-    final n = appState.live.length;
-    if (n > _seenLive && mounted) {
-      final item = appState.live.first;
-      _seenLive = n;
-      if (item.investigation.verdict.level.index >= RiskLevel.suspicious.index ||
-          (item.conversation?.level.index ?? 0) >= RiskLevel.suspicious.index) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Kantoi flagged a message from ${item.chat}: ${riskLabel(item.investigation.verdict.level)}'),
-          action: SnackBarAction(label: 'View', onPressed: () => setState(() => _tab = 2)),
-        ));
-      }
-    }
-    if (mounted) setState(() {});
+  void _onTab() {
+    if (mounted) setState(() => _built.add(appState.tab.value));
   }
 
   @override
   void dispose() {
-    appState.removeListener(_onState);
+    appState.tab.removeListener(_onTab);
     super.dispose();
   }
 
-  Widget get _page => switch (_tab) {
+  Widget _page(int i) => switch (i) {
         0 => const CheckPage(),
-        1 => const RelationshipPage(),
-        2 => const LivePage(),
-        3 => const IntelPage(),
-        4 => const LearnPage(),
-        5 => const EmergencyPage(embedded: true),
-        _ => const SettingsPage(),
+        1 => const IntelPage(),
+        2 => const LearnPage(),
+        _ => const EmergencyPage(embedded: true),
       };
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 760;
-    final liveBadge = appState.live.where((i) => i.investigation.verdict.level.index >= RiskLevel.suspicious.index).length;
-    Widget icon(int i) {
-      final ic = Icon(_dests[i].$1, color: i == _paidTab ? const Color(0xFFDC2626) : null);
-      return i == 2 && liveBadge > 0 ? Badge(label: Text('$liveBadge'), child: ic) : ic;
-    }
-
-    final body = SafeArea(
-        child: Column(children: [
-      const CaseReminderBanner(),
-      Expanded(child: KeyedSubtree(key: ValueKey(_tab), child: _page)),
-    ]));
-    if (wide) {
-      return Scaffold(
-        body: Row(children: [
-          NavigationRail(
-            selectedIndex: _tab,
-            onDestinationSelected: (i) => setState(() => _tab = i),
-            labelType: NavigationRailLabelType.all,
-            leading: const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: _Logo(compact: true)),
-            destinations: [
-              for (var i = 0; i < _dests.length; i++) NavigationRailDestination(icon: icon(i), label: Text(_dests[i].$2)),
-            ],
-          ),
-          const VerticalDivider(width: 1),
-          Expanded(child: body),
-        ]),
-      );
-    }
-    // Phones get the five most-used tabs at the bottom; Live (desktop
-    // extension) and Settings move to the top bar.
-    const bottom = [0, 1, 3, 4, _paidTab];
-    final sel = bottom.indexOf(_tab);
+    final tab = appState.tab.value;
     return Scaffold(
-      appBar: AppBar(title: const _Logo(), centerTitle: false, actions: [
-        if (guardSupported || appState.extensionConnected || appState.live.isNotEmpty)
-          IconButton(tooltip: guardSupported ? 'Phone protection' : 'Live', onPressed: () => setState(() => _tab = 2), icon: icon(2)),
-        IconButton(tooltip: 'Settings', onPressed: () => setState(() => _tab = 6), icon: Icon(_dests[6].$1)),
-      ]),
-      body: body,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: sel < 0 ? 0 : sel,
-        indicatorColor: sel < 0 ? Colors.transparent : null,
-        onDestinationSelected: (i) => setState(() => _tab = bottom[i]),
-        destinations: [
-          for (final i in bottom) NavigationDestination(icon: icon(i), label: _dests[i].$2),
+      extendBody: true,
+      appBar: AppBar(
+        titleSpacing: 16,
+        title: const KantoiLogo(),
+        actions: [
+          const ProtectedPill(),
+          IconButton(
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => Scaffold(appBar: AppBar(title: const Text('Settings')), body: const SettingsPage()))),
+          ),
+          const SizedBox(width: 4),
         ],
+      ),
+      body: Column(children: [
+        const CaseReminderBanner(),
+        Expanded(
+          child: Stack(children: [
+            for (var i = 0; i < _tabs.length; i++)
+              if (_built.contains(i))
+                IgnorePointer(
+                  ignoring: i != tab,
+                  child: AnimatedOpacity(
+                    opacity: i == tab ? 1 : 0,
+                    duration: K.fast,
+                    child: AnimatedSlide(
+                      offset: i == tab ? Offset.zero : const Offset(0, 0.02),
+                      duration: K.medium,
+                      curve: K.curve,
+                      child: TickerMode(enabled: i == tab, child: KeyedSubtree(key: ValueKey(i), child: _page(i))),
+                    ),
+                  ),
+                ),
+          ]),
+        ),
+      ]),
+      bottomNavigationBar: _GlassNav(
+        index: tab,
+        items: _tabs,
+        onTap: (i) => appState.tab.value = i,
       ),
     );
   }
 }
 
-class _ResultPage extends StatelessWidget {
-  final Investigation inv;
-  const _ResultPage({required this.inv});
+/// Frosted bottom bar with a sliding highlight; Emergency is always red.
+class _GlassNav extends StatelessWidget {
+  final int index;
+  final List<(IconData, IconData, String)> items;
+  final ValueChanged<int> onTap;
+  const _GlassNav({required this.index, required this.items, required this.onTap});
+
   @override
-  Widget build(BuildContext context) => PageBody(children: [ResultView(inv: inv)]);
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.85),
+            border: Border(top: BorderSide(color: K.outlineVariant.withValues(alpha: 0.5))),
+          ),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: 64,
+              child: Row(children: [
+                for (var i = 0; i < items.length; i++)
+                  Expanded(
+                    child: InkResponse(
+                      onTap: () => onTap(i),
+                      child: _NavItem(item: items[i], selected: i == index, danger: i == 3),
+                    ),
+                  ),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _Logo extends StatelessWidget {
-  final bool compact;
-  const _Logo({this.compact = false});
+class _NavItem extends StatelessWidget {
+  final (IconData, IconData, String) item;
+  final bool selected;
+  final bool danger;
+  const _NavItem({required this.item, required this.selected, required this.danger});
+
   @override
-  Widget build(BuildContext context) => Flex(direction: compact ? Axis.vertical : Axis.horizontal, mainAxisSize: MainAxisSize.min, children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(color: brand, borderRadius: BorderRadius.circular(10)),
-          child: const Icon(Icons.policy_rounded, color: Colors.white, size: 22),
+  Widget build(BuildContext context) {
+    final c = danger ? K.red : (selected ? K.primary : K.outline);
+    return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      AnimatedContainer(
+        duration: K.medium,
+        curve: K.curve,
+        padding: EdgeInsets.symmetric(horizontal: selected ? 18 : 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: selected ? (danger ? K.red : K.primary).withValues(alpha: 0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(99),
         ),
-        const SizedBox(width: 8, height: 4),
-        Text('Kantoi', style: (compact ? Theme.of(context).textTheme.titleSmall : Theme.of(context).textTheme.titleLarge)?.copyWith(fontWeight: FontWeight.w900)),
-      ]);
+        child: Icon(selected ? item.$2 : item.$1, color: c, size: 24),
+      ),
+      const SizedBox(height: 2),
+      Text(item.$3, style: TextStyle(fontSize: 11, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: c)),
+    ]);
+  }
+}
+
+/// "Protected" with a breathing green dot when phone protection is fully
+/// on, "Turn on" in amber otherwise. Tapping opens the Protection centre.
+class ProtectedPill extends StatefulWidget {
+  const ProtectedPill({super.key});
+  @override
+  State<ProtectedPill> createState() => _ProtectedPillState();
+}
+
+class _ProtectedPillState extends State<ProtectedPill> with WidgetsBindingObserver {
+  GuardStatus? _s;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final s = await guardStatus();
+    if (mounted) setState(() => _s = s);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!guardSupported) return const SizedBox.shrink();
+    final on = _s?.ready ?? false;
+    final c = on ? K.green : K.amber;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Material(
+        color: c.withValues(alpha: 0.1),
+        shape: const StadiumBorder(),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: () async {
+            await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProtectionPage()));
+            _refresh();
+          },
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 12, 0),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              on ? PulseDot(color: c, size: 7) : Padding(padding: const EdgeInsets.all(4), child: Icon(Icons.error_outline_rounded, size: 14, color: c)),
+              Text(_s == null ? '...' : (on ? 'Protected' : 'Turn on'),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c)),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A full check opened on its own screen (from history, a notification or
+/// a deep link).
+class ResultScreen extends StatelessWidget {
+  final Investigation inv;
+  const ResultScreen({super.key, required this.inv});
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Result')),
+        body: PageBody(children: [ResultView(inv: inv)]),
+      );
 }
