@@ -3,8 +3,15 @@ import 'dart:convert';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
+import '../engine/cues.dart';
 import '../engine/models.dart';
 import '../engine/relationship.dart';
+import '../engine/relationship_check.dart';
+import '../state.dart';
+import 'activity_log.dart';
+import 'emergency_page.dart';
+import 'feedback_bar.dart';
+import 'result_view.dart' show HighlightedText;
 import 'theme.dart';
 
 class RelationshipPage extends StatefulWidget {
@@ -20,8 +27,12 @@ class _RelationshipPageState extends State<RelationshipPage> {
   String? _me;
   Origin _origin = Origin.unknown;
   bool? _video;
+  MoneyAnswer _money = MoneyAnswer.unknown;
+  final _ids = TextEditingController();
   final Map<String, int> _answers = {};
   RelationshipReport? _report;
+  bool _busy = false;
+  List<LogStep> _steps = [];
 
   List<String> get _senders => _msgs.map((m) => m.sender).toSet().toList();
 
@@ -35,12 +46,46 @@ class _RelationshipPageState extends State<RelationshipPage> {
     });
   }
 
-  void _analyse() {
+  Future<void> _analyse() async {
     final msgs = _msgs
         .map((m) => ChatMessage(time: m.time, sender: m.sender, text: m.text, fromMe: m.sender == _me))
         .toList();
-    setState(() => _report = analyzeConversation(msgs, origin: _origin, metOnVideo: _video));
+    setState(() {
+      _busy = true;
+      _report = null;
+      _steps = [];
+    });
+    try {
+      final r = await checkRelationship(msgs,
+          origin: _origin,
+          metOnVideo: _video,
+          money: _money,
+          pastedIdentifiers: _ids.text,
+          llm: appState.llm,
+          ownDetails: appState.ownDetails, onStep: (s) {
+        if (mounted) setState(() => _steps = s);
+      });
+      if (mounted) setState(() => _report = r);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
+
+  Future<void> _quizResult() async {
+    final r = await checkQuestionnaire(_answers, pastedIdentifiers: _ids.text);
+    if (mounted) setState(() => _report = r);
+  }
+
+  Widget _idsField() => TextField(
+        controller: _ids,
+        minLines: 1,
+        maxLines: 3,
+        decoration: const InputDecoration(
+          labelText: 'Optional: account number, phone number or profile link they gave you',
+          hintText: 'e.g. 5642 1234 5678 or facebook.com/amanda.lee',
+        ),
+        onChanged: (_) => setState(() => _report = null),
+      );
 
   Future<void> _open() async {
     final f = await openFile(acceptedTypeGroups: const [
@@ -74,12 +119,14 @@ class _RelationshipPageState extends State<RelationshipPage> {
       ),
       const SizedBox(height: 16),
       if (!_quiz) ..._chatForm(t) else ..._quizForm(t),
+      if (_busy) ...[const SizedBox(height: 16), const LinearProgressIndicator(), const SizedBox(height: 8), ActivityLog(steps: _steps)],
       if (_report != null) ...[const SizedBox(height: 20), RelationshipResult(report: _report!, messages: _quiz ? const [] : _msgs)],
     ]);
   }
 
   List<Widget> _chatForm(TextTheme t) => [
-        Text('In WhatsApp: open the chat, tap ⋮ → More → Export chat → Without media. Then open or paste it here.', style: t.bodySmall),
+        Text('In WhatsApp: open the chat, tap ⋮ → More → Export chat → Without media. Then open or paste it here. '
+            'Only check chats you are part of. The chat is read on your device.', style: t.bodySmall),
         const SizedBox(height: 8),
         TextField(
           controller: _chat,
@@ -122,8 +169,18 @@ class _RelationshipPageState extends State<RelationshipPage> {
             for (final (label, v) in [('Yes', true), ('No', false), ('Not sure', null)])
               ChoiceChip(label: Text(label), selected: _video == v, onSelected: (_) => setState(() => _video = v)),
           ]),
+          const SizedBox(height: 10),
+          Text('Has money been asked for or sent?', style: t.bodyMedium),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final v in [MoneyAnswer.no, MoneyAnswer.asked, MoneyAnswer.sent, MoneyAnswer.unknown])
+              ChoiceChip(label: Text(moneyLabels[v]!), selected: _money == v, onSelected: (_) => setState(() => _money = v)),
+          ]),
+          const SizedBox(height: 12),
+          _idsField(),
           const SizedBox(height: 14),
-          FilledButton.icon(onPressed: _analyse, icon: const Icon(Icons.insights_rounded), label: const Text('Check this relationship')),
+          FilledButton.icon(
+              onPressed: _busy ? null : _analyse, icon: const Icon(Icons.insights_rounded), label: const Text('Check this relationship')),
         ],
       ];
 
@@ -146,8 +203,10 @@ class _RelationshipPageState extends State<RelationshipPage> {
           ]),
         ],
         const SizedBox(height: 18),
+        _idsField(),
+        const SizedBox(height: 14),
         FilledButton.icon(
-          onPressed: _answers.isEmpty ? null : () => setState(() => _report = scoreQuestionnaire(_answers)),
+          onPressed: _answers.isEmpty ? null : _quizResult,
           icon: const Icon(Icons.insights_rounded),
           label: Text('See my result (${_answers.length}/${questionnaire.length} answered)'),
         ),
@@ -164,6 +223,7 @@ class RelationshipResult extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final c = riskColor(report.level);
     final signals = [...report.signals]..sort((a, b) => b.weight.compareTo(a.weight));
+    final keyMessages = report.keyMessages.where((i) => i < messages.length).toList();
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Card(
         color: c.withValues(alpha: 0.08),
@@ -188,14 +248,41 @@ class RelationshipResult extends StatelessWidget {
                   ].join(' '),
                   style: t.bodyMedium),
             ],
-            if (report.level.index >= RiskLevel.suspicious.index) ...[
-              const SizedBox(height: 10),
-              Text('Next step: ask for a live video call today, and do not send any money until you have seen them.',
-                  style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+            if (report.nextStep.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(12)),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Icon(Icons.arrow_forward_rounded, color: c),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(report.nextStep, style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700, height: 1.35))),
+                ]),
+              ),
             ],
+            if (report.level.index >= RiskLevel.caution.index) ...[
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+                icon: const Icon(Icons.emergency_rounded),
+                label: const Text('I already paid'),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmergencyPage())),
+              ),
+            ],
+            const SizedBox(height: 10),
+            Text('These signs are consistent with a scam script. They do not prove who this person is.', style: t.bodySmall),
           ]),
         ),
       ),
+      if (keyMessages.isNotEmpty) ...[
+        const SectionTitle('The messages that matter most'),
+        for (final i in keyMessages) ...[
+          Text('${messages[i].sender}${messages[i].time == null ? '' : ', ${_date(messages[i].time!)}'}', style: t.labelMedium),
+          const SizedBox(height: 4),
+          HighlightedText(text: messages[i].text, findings: detectCues(messages[i].text)),
+          const SizedBox(height: 10),
+        ],
+      ],
       if (report.timeline.length > 2) ...[
         const SectionTitle('How the risk built up'),
         Card(
@@ -214,8 +301,22 @@ class RelationshipResult extends StatelessWidget {
           title: Text(s.title, style: const TextStyle(fontWeight: FontWeight.w700)),
           subtitle: Text('${s.group} · ${s.detail}'),
         ),
+      if (report.identifiers.isNotEmpty) ...[
+        const SectionTitle('Their accounts, numbers and links'),
+        Text('Kept as evidence for a report. Check any account number on Semak Mule before paying.', style: t.bodySmall),
+        const SizedBox(height: 6),
+        Wrap(spacing: 8, runSpacing: 8, children: [for (final id in report.identifiers) Chip(label: SelectableText(id))]),
+      ],
+      if (report.log.isNotEmpty) ...[
+        const SectionTitle('How Kantoi checked'),
+        ActivityLog(steps: report.log),
+      ],
+      const SizedBox(height: 12),
+      FeedbackBar(key: ObjectKey(report), relationship: report),
     ]);
   }
+
+  static String _date(DateTime t) => '${t.day}/${t.month}/${t.year} ${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 }
 
 /// Line chart of the conversation's risk, message by message, with turning

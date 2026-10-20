@@ -1,5 +1,15 @@
+import 'consistency.dart';
 import 'cues.dart';
+import 'entities.dart';
+import 'fingerprint.dart';
 import 'models.dart';
+import 'rhythm.dart';
+
+/// Hook for the attribution database: given the scammer's account numbers,
+/// phone numbers, wallets and profile links, returns how many earlier reports
+/// mention any of them. The integrator wires this to the attribution lookup;
+/// while it is null the "Linked reports" check is skipped.
+Future<int> Function(List<String> identifiers)? linkedReportCounter;
 
 class ChatMessage {
   final DateTime? time;
@@ -86,11 +96,32 @@ class TimelinePoint {
 class RelationshipReport {
   final int score;
   final RiskLevel level;
+
+  /// One plain line, e.g. "This chat follows the pattern of an investment
+  /// scam. You have never met this person, and the first money request came
+  /// 9 days after first contact."
   final String headline;
   final List<RelSignal> signals;
   final List<TimelinePoint> timeline;
   final int? daysKnown;
   final int? daysToFirstMoneyAsk;
+
+  /// The scam pattern the chat is consistent with, or null if none.
+  final String? patternType;
+
+  /// One safe next step.
+  final String nextStep;
+
+  /// Indexes of the three or four messages that matter most.
+  final List<int> keyMessages;
+
+  /// The other person's account numbers, phone numbers, wallets and profile
+  /// links, from the chat and from what the user pasted. Used for linked
+  /// reports and attribution.
+  final List<String> identifiers;
+
+  /// What Kantoi did, including anything sent off the device.
+  final List<LogStep> log;
   const RelationshipReport({
     required this.score,
     required this.level,
@@ -99,6 +130,11 @@ class RelationshipReport {
     required this.timeline,
     this.daysKnown,
     this.daysToFirstMoneyAsk,
+    this.patternType,
+    this.nextStep = '',
+    this.keyMessages = const [],
+    this.identifiers = const [],
+    this.log = const [],
   });
   Map<String, dynamic> toJson() => {
         'score': score,
@@ -109,7 +145,55 @@ class RelationshipReport {
         'timeline': timeline.map((t) => t.toJson()).toList(),
         'daysKnown': daysKnown,
         'daysToFirstMoneyAsk': daysToFirstMoneyAsk,
+        'patternType': patternType,
+        'nextStep': nextStep,
+        'keyMessages': keyMessages,
+        'identifiers': identifiers,
+        'log': log.map((s) => s.toJson()).toList(),
       };
+}
+
+/// The answer to "Has money been asked for or sent?".
+enum MoneyAnswer { unknown, no, asked, sent }
+
+const moneyLabels = {
+  MoneyAnswer.no: 'No',
+  MoneyAnswer.asked: 'They asked, I have not paid',
+  MoneyAnswer.sent: 'Yes, I have sent money',
+  MoneyAnswer.unknown: 'Not sure',
+};
+
+final _bareNumber = RegExp(r'(?<![\d+])\d[\d\s-]{6,22}\d(?!\d)');
+
+/// Account numbers, phone numbers, wallets, emails, handles and profile links
+/// in [text]. A bare run of 8 to 17 digits counts too, because people paste
+/// an account number on its own.
+List<String> extractIdentifiers(String text) {
+  final out = <String>[];
+  void add(String v) {
+    final t = v.trim();
+    if (t.isNotEmpty && !out.contains(t)) out.add(t);
+  }
+
+  final ents = extractEntities(text);
+  for (final e in ents) {
+    if (e.type != EntityType.amount) add(e.value);
+  }
+  for (final m in _bareNumber.allMatches(text)) {
+    if (ents.any((e) => m.start < e.end && m.end > e.start)) continue;
+    final digits = m.group(0)!.replaceAll(RegExp(r'\D'), '');
+    if (digits.length >= 8 && digits.length <= 17) add(digits);
+  }
+  return out;
+}
+
+/// Which messages are the other person's. If none are marked as the user's
+/// and there are exactly two senders, the one who wrote first is "them".
+bool Function(ChatMessage) theirMessages(List<ChatMessage> msgs) {
+  final senders = msgs.map((m) => m.sender).toSet();
+  final anyMine = msgs.any((m) => m.fromMe);
+  final theirName = !anyMine && senders.length == 2 ? msgs.first.sender : null;
+  return (m) => anyMine ? !m.fromMe : (theirName == null || m.sender == theirName);
 }
 
 RiskLevel levelFor(int score) => score >= 65
@@ -156,7 +240,12 @@ final _wrongNumber = RegExp(
 /// a scam script rather than a genuine relationship. Only the other person's
 /// messages are scored.
 RelationshipReport analyzeConversation(List<ChatMessage> msgs,
-    {Origin origin = Origin.unknown, bool? metOnVideo}) {
+    {Origin origin = Origin.unknown,
+    bool? metOnVideo,
+    MoneyAnswer money = MoneyAnswer.unknown,
+    List<String> identifiers = const [],
+    List<RelSignal> extraSignals = const [],
+    List<LogStep> log = const []}) {
   final signals = <RelSignal>[];
   final timeline = <TimelinePoint>[];
   var raw = 0.0;
@@ -191,10 +280,7 @@ RelationshipReport analyzeConversation(List<ChatMessage> msgs,
 
   // If no message is marked as the user's, treat the sender who wrote first as
   // the other party only when there are exactly two senders.
-  final senders = msgs.map((m) => m.sender).toSet();
-  final anyMine = msgs.any((m) => m.fromMe);
-  final theirName = !anyMine && senders.length == 2 ? msgs.first.sender : null;
-  bool isTheirs(ChatMessage m) => anyMine ? !m.fromMe : (theirName == null || m.sender == theirName);
+  final isTheirs = theirMessages(msgs);
 
   const groupFor = {
     CueCategory.romance: 'Escalation',
@@ -243,12 +329,40 @@ RelationshipReport analyzeConversation(List<ChatMessage> msgs,
     timeline.add(TimelinePoint(i, m.time, squash(raw.clamp(0, 999)), turning));
   }
 
+  // What the user told us about money.
+  if (money == MoneyAnswer.asked) {
+    addSignal(const RelSignal('Money', 'They have asked you for money', 'You said they have asked you for money.', 10));
+  } else if (money == MoneyAnswer.sent) {
+    addSignal(const RelSignal('Money', 'You have already sent money',
+        'You said you have already sent money. Scammers usually ask again, with a new reason each time.', 14));
+  }
+
+  // Texting rhythm, story consistency and (for long histories) the
+  // person's own writing style. All on the device.
+  for (final s in rhythmSignals(textingRhythm(msgs, isTheirs))) {
+    addSignal(s);
+  }
+  final local = findContradictions(msgs, isTheirs).map((c) => c.toSignal()).toList();
+  for (final s in local) {
+    addSignal(s);
+  }
+  final known = knownContactSignals(msgs, isTheirs);
+  for (final s in known) {
+    addSignal(s);
+  }
+  for (final s in extraSignals) {
+    // Skip an AI contradiction the on-device check already found.
+    if (s.group == 'Consistency' && local.any((l) => l.title == s.title)) continue;
+    addSignal(s);
+  }
+  final hijack = known.any((s) => s.weight >= 20);
+
   // Combinations that matter more than their parts.
   if (seen.contains(CueCategory.romance) && (seen.contains(CueCategory.investment) || seen.contains(CueCategory.payment))) {
     addSignal(const RelSignal('Script', 'Romance leading to money',
         'Affection followed by an investment tip or money request is the pattern of "pig-butchering" love and investment scams.', 18));
   }
-  if (daysToMoney != null && daysToMoney <= 30) {
+  if (daysToMoney != null && daysToMoney <= 30 && !hijack) {
     addSignal(RelSignal('Timeline', 'Money came up fast',
         'The first money-related request came $daysToMoney day(s) after you started talking.', 12));
   } else if (daysKnown != null && daysKnown > 365 && !seen.contains(CueCategory.payment)) {
@@ -257,25 +371,92 @@ RelationshipReport analyzeConversation(List<ChatMessage> msgs,
 
   final score = squash(raw.clamp(0, 999));
   final level = levelFor(score);
-  final headline = switch (level) {
-    RiskLevel.danger => 'This conversation follows a known scam script. Do not send money.',
-    RiskLevel.suspicious => 'Several warning signs. Verify who this person is before going further.',
-    RiskLevel.caution => 'A few things to watch, but no clear scam pattern yet.',
-    RiskLevel.safe => 'No scam pattern found in this conversation.',
-  };
   if (timeline.isNotEmpty) {
     final lastPoint = timeline.removeLast();
     timeline.add(TimelinePoint(lastPoint.index, lastPoint.time, score, lastPoint.turningPoint));
   }
+  final job = signals.any((s) => s.title == 'Easy-money job offer');
+  final String? pattern;
+  if (level.index < RiskLevel.caution.index) {
+    pattern = null;
+  } else if (hijack) {
+    pattern = 'a hijacked or cloned account';
+  } else if (seen.contains(CueCategory.romance) && seen.contains(CueCategory.investment)) {
+    pattern = 'a love and investment scam';
+  } else if (job) {
+    pattern = 'a job scam';
+  } else if (seen.contains(CueCategory.investment)) {
+    pattern = 'an investment scam';
+  } else if (seen.contains(CueCategory.romance)) {
+    pattern = 'a love scam';
+  } else if (seen.contains(CueCategory.payment) || seen.contains(CueCategory.credentials)) {
+    pattern = 'a money scam';
+  } else {
+    pattern = null;
+  }
+  final allIds = <String>[...identifiers];
+  for (final m in msgs.where(isTheirs)) {
+    for (final id in extractIdentifiers(m.text)) {
+      if (!allIds.contains(id)) allIds.add(id);
+    }
+  }
+  final keys = <int>[];
+  for (final s in [...signals]..sort((a, b) => b.weight.compareTo(a.weight))) {
+    if (s.weight > 0 && s.messageIndex != null && !keys.contains(s.messageIndex)) keys.add(s.messageIndex!);
+    if (keys.length == 4) break;
+  }
+  keys.sort();
   return RelationshipReport(
     score: score,
     level: level,
-    headline: headline,
+    headline: relationshipHeadline(level, pattern, metOnVideo, daysToMoney),
     signals: signals,
     timeline: timeline,
     daysKnown: daysKnown,
     daysToFirstMoneyAsk: daysToMoney,
+    patternType: pattern,
+    nextStep: relationshipNextStep(level, hijack: hijack, paid: money == MoneyAnswer.sent),
+    keyMessages: keys,
+    identifiers: allIds.take(20).toList(),
+    log: log,
   );
+}
+
+/// The one line the user sees first.
+String relationshipHeadline(RiskLevel level, String? pattern, bool? metOnVideo, int? daysToMoney) {
+  if (level == RiskLevel.safe) return 'No scam pattern found in this conversation.';
+  final first = pattern == null
+      ? (level == RiskLevel.caution
+          ? 'A few things to watch, but no clear scam pattern yet.'
+          : 'This chat has several warning signs of a scam script.')
+      : level == RiskLevel.caution
+          ? 'This chat shows early signs of $pattern.'
+          : 'This chat follows the pattern of $pattern.';
+  final facts = <String>[
+    if (metOnVideo == false) 'You have never met this person',
+    if (metOnVideo == true) 'You have met this person',
+    if (daysToMoney != null)
+      daysToMoney == 0
+          ? 'the first money request came on the first day'
+          : 'the first money request came $daysToMoney day${daysToMoney == 1 ? '' : 's'} after first contact',
+  ];
+  if (facts.isEmpty) return first;
+  final joined = facts.length == 2 ? '${facts[0]}, and ${facts[1]}' : facts.first;
+  return '$first ${joined[0].toUpperCase()}${joined.substring(1)}.';
+}
+
+/// One safe next step for the result card.
+String relationshipNextStep(RiskLevel level, {bool hijack = false, bool paid = false}) {
+  if (hijack) {
+    return 'Call them on a number you already know, not this chat. Do not send money until you have spoken to them. '
+        'If you have paid, press the red button.';
+  }
+  return switch (level) {
+    RiskLevel.danger || RiskLevel.suspicious =>
+      'Ask for a live video call. Do not send ${paid ? 'more' : 'any'} money. If you have paid, press the red button.',
+    RiskLevel.caution => 'Ask for a live video call before you trust them with money or personal details.',
+    RiskLevel.safe => 'No action needed. Check again if they ever ask for money.',
+  };
 }
 
 class Question {
@@ -339,7 +520,8 @@ const questionnaire = <Question>[
   ]),
 ];
 
-RelationshipReport scoreQuestionnaire(Map<String, int> answers) {
+RelationshipReport scoreQuestionnaire(Map<String, int> answers,
+    {List<String> identifiers = const [], List<RelSignal> extraSignals = const [], List<LogStep> log = const []}) {
   final signals = <RelSignal>[];
   var raw = 0;
   for (final q in questionnaire) {
@@ -349,13 +531,36 @@ RelationshipReport scoreQuestionnaire(Map<String, int> answers) {
     raw += w;
     if (w != 0) signals.add(RelSignal('Your answers', q.text, label, w));
   }
+  for (final s in extraSignals) {
+    raw += s.weight;
+    signals.add(s);
+  }
   final score = squash(raw.clamp(0, 999));
   final level = levelFor(score);
+  final pitch = (answers['pitch'] ?? 0) > 0, dating = (answers['origin'] ?? 0) == 3;
+  final String? pattern;
+  if (level.index < RiskLevel.caution.index) {
+    pattern = null;
+  } else if (dating && pitch) {
+    pattern = 'a love and investment scam';
+  } else if (pitch) {
+    pattern = 'an investment scam';
+  } else if ((answers['money'] ?? 0) > 0) {
+    pattern = 'a money scam';
+  } else {
+    pattern = null;
+  }
+  final seen = answers['seen'];
+  final first = relationshipHeadline(level, pattern, seen == null ? null : seen == 0, null);
   return RelationshipReport(
     score: score,
     level: level,
-    headline: '${riskLabel(level)}. Based on your answers only, so a chat export would give a more certain result.',
+    headline: '$first Based on your answers only, so a chat export would give a more certain result.',
     signals: signals,
     timeline: const [],
+    patternType: pattern,
+    nextStep: relationshipNextStep(level, paid: (answers['route'] ?? 0) > 0),
+    identifiers: identifiers,
+    log: log,
   );
 }
