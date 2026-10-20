@@ -128,7 +128,11 @@ Future<Investigation> investigate(
     }
     // Point link findings at the link's position in the text.
     final pos = text.indexOf(u);
-    findings.addAll(linkFindings.map((f) => pos < 0
+    // A wa.me or t.me link opens a chat with anyone, so an official domain
+    // says nothing about who is behind it.
+    final chatLink = const ['wa.me', 't.me', 'chat.whatsapp.com', 'api.whatsapp.com', 'm.me']
+        .any((h) => a.report.host.toLowerCase() == h || a.report.host.toLowerCase().endsWith('.$h'));
+    findings.addAll(linkFindings.where((f) => !(chatLink && f.category == CueCategory.legitimacy)).map((f) => pos < 0
         ? f
         : Finding(
             category: f.category,
@@ -259,6 +263,8 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
   if (has(CueCategory.reward) && has(CueCategory.impersonation)) raw += 10;
   if (has(CueCategory.reward) && has(CueCategory.link)) raw += 8;
   if (has(CueCategory.romance) && has(CueCategory.investment)) raw += 12;
+  // An investment or job pitch that also asks for money or crypto.
+  if (has(CueCategory.investment) && has(CueCategory.payment)) raw += 8;
 
   var score = squash(raw.clamp(0, 999));
   // Genuine messages never address AI checkers, so this alone is decisive.

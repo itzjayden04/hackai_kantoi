@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../engine/cases.dart';
 import '../engine/models.dart';
 import '../engine/report.dart';
 import 'guardian_ui.dart';
+import '../local_store.dart';
+import 'case_tracker.dart';
 import 'report_page.dart';
 import 'theme.dart';
 
@@ -13,22 +16,25 @@ import 'theme.dart';
 class EmergencyPage extends StatefulWidget {
   final Investigation? inv;
   final bool embedded;
-  const EmergencyPage({super.key, this.inv, this.embedded = false});
+
+  /// Opens a saved case's checklist (from the reminder banner).
+  final String? caseId;
+  const EmergencyPage({super.key, this.inv, this.embedded = false, this.caseId});
   @override
   State<EmergencyPage> createState() => _EmergencyPageState();
 }
 
 class _EmergencyPageState extends State<EmergencyPage> {
   final _d = ReportDetails();
-  final _done = <String>{};
 
-  static const _steps = [
-    ('call997', 'Call 997 (National Scam Response Centre)', 'Every minute counts. They can work with banks to freeze the money.'),
-    ('callBank', 'Call your bank', 'Use the number on the back of your card. Ask them to block your account and card.'),
-    ('passwords', 'Change your passwords', 'Banking app first, then email. Log out of all other devices.'),
-    ('stop', 'Stop all contact with the scammer', 'Do not pay any "recovery fee". Recovery offers are a second scam.'),
-    ('police', 'Make a police report within 24 hours', 'Your bank will ask for it. Kantoi prepares it for you below.'),
-  ];
+  // One checklist per case, saved on the device and shared with the report
+  // page, so progress survives closing the app.
+  late final String _caseId = widget.inv != null
+      ? caseIdFor(widget.inv!)
+      : widget.caseId ?? localStore.latestOpenCase?.id ?? 'case-${DateTime.now().millisecondsSinceEpoch}';
+  late final String _caseTitle = widget.inv != null
+      ? caseTitleFor(widget.inv)
+      : localStore.cases.where((c) => c.id == _caseId).firstOrNull?.title ?? caseTitleFor(null);
 
   @override
   void initState() {
@@ -55,7 +61,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
           label: const Text('Call 997 now'),
           onPressed: () {
             launchUrl(Uri.parse('tel:997'));
-            setState(() => _done.add('call997'));
+            localStore.setStep(localStore.caseFor(_caseId, title: _caseTitle), 'call997', true);
           },
         ),
       ),
@@ -86,18 +92,8 @@ class _EmergencyPageState extends State<EmergencyPage> {
           ]),
         ),
       ),
-      SectionTitle('Your checklist', trailing: Text('${_done.length} of ${_steps.length} done', style: t.bodySmall)),
-      Card(
-        child: Column(children: [
-          for (final s in _steps)
-            CheckboxListTile(
-              value: _done.contains(s.$1),
-              onChanged: (v) => setState(() => v == true ? _done.add(s.$1) : _done.remove(s.$1)),
-              title: Text(s.$2, style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: Text(s.$3),
-            ),
-        ]),
-      ),
+      const SectionTitle('Your checklist'),
+      CaseChecklist(caseId: _caseId, title: _caseTitle),
       const SizedBox(height: 16),
       if (widget.inv != null)
         FilledButton.icon(

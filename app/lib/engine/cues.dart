@@ -26,7 +26,7 @@ final List<_Rule> _rules = [
   // Credentials
   _Rule(CueCategory.credentials, r'\b(otp|tac|one[- ]time (password|pin)|pin( number)?|password|kata laluan|cvv|card number|nombor kad|login details|username)\b', 14,
       'Asks for secret codes', 'No real bank, courier or agency will ever ask for your OTP, TAC, PIN or password.'),
-  _Rule(CueCategory.credentials, r"(?<!(not|never|n't|jangan) )\b(reply|send|give|forward|share|tell|bagi|hantar)( me| us)? (with )?(the |your |that )?(\d-digit )?(code|otp|tac|pin|verification code|kod)\b", 26,
+  _Rule(CueCategory.credentials, r"(?<!(not|never|n't|jangan) )\b(reply|send|give|forward|share|tell|bagi|hantar)( me| us)? (with )?(the |your |that )?(\d[- ]?digits? )?(code|otp|tac|pin|verification code|kod)\b", 26,
       'Wants your code', 'Anyone asking you to send them a code you received is trying to take over your account.'),
   _Rule(CueCategory.credentials, r'\b(verify|update|confirm|reactivate|unlock|sahkan|kemas ?kini)\b.{0,40}\b(account|akaun|identity|details|maklumat|ic|mykad)\b', 10,
       'Asks you to "verify" your account', 'Verification requests through a link are the most common way bank logins get stolen.'),
@@ -41,8 +41,12 @@ final List<_Rule> _rules = [
       'Untraceable payment method', 'Gift cards and crypto are hard to trace or reverse, which is why scammers prefer them.'),
   _Rule(CueCategory.payment, r"\b(my (friend|cousin|uncle|boss|agent)'?s? account|third[- ]party account|akaun (kawan|orang lain)|not (in )?my name)\b", 14,
       "Pay into someone else's account", "Paying into an account that doesn't match the person or company is a strong sign of a mule account."),
+  _Rule(CueCategory.payment, r'\b(pay|bayar|transfer|bank.?in)\b.{0,40}\b(fee|yuran|caj|deposit|insurance|insurans)\b.{0,50}\b(loan|pinjaman|release|keluarkan|prize|hadiah|claim|tuntut)\b|\b(processing|insurance|admin|release) fee\b.{0,40}\b(loan|pinjaman|prize|hadiah)\b', 14,
+      'Pay a fee first to get a loan or prize', 'Real lenders take fees from the loan itself, and real prizes never cost money to claim.'),
+  _Rule(CueCategory.reward, r'\b(pinjaman|loan)\b.{0,40}\b(tanpa dokumen|no documents?|tanpa ctos|no ctos|lulus (dalam|segera)|instant(ly)? approv\w*|approved? in \d+)', 10,
+      'Instant loan with no checks', 'Loans "approved in an hour with no documents" are bait for an upfront-fee scam.'),
   // Secrecy and isolation
-  _Rule(CueCategory.secrecy, r"\b(don'?t tell|do not tell|jangan (beritahu|bagitahu|cakap)|keep (this|it) (secret|confidential|between us)|rahsia|confidential|sulit|don'?t (contact|call) (the )?(bank|police))\b", 14,
+  _Rule(CueCategory.secrecy, r"\b(don'?t tell|do not tell|jangan (beritahu|bagitahu|cakap)|keep (this|it|our \w+|us) (a )?(secret|confidential|between us)|rahsia|confidential|sulit|don'?t (contact|call) (the )?(bank|police))\b", 14,
       'Asks for secrecy', 'Being told to keep it secret or not to call your bank cuts you off from people who would warn you.'),
   // Channel switch
   _Rule(CueCategory.channelSwitch, r'\b(add (me|my) (on|to)|contact (me|us) (on|via)|chat (on|in)|move to|switch to|join (our|my|the)|tambah).{0,25}\b(whatsapp|telegram|wechat|line|signal|group)\b|\bt\.me/|\bwa\.me/|\bchat\.whatsapp\.com/', 9,
@@ -64,6 +68,11 @@ final List<_Rule> _rules = [
       'Fast emotional bond', 'Strong affection early on, especially from someone you have never met, is used to build trust before asking for money.'),
   _Rule(CueCategory.romance, r"\b(can'?t|cannot|unable to) (video ?call|meet|turn on (my )?camera)|camera (is )?(broken|rosak)|i'?m (on an oil rig|in the army|a doctor (with|in) (the )?un|deployed|working overseas)\b", 12,
       'Avoids being seen', 'Excuses for never meeting or video calling are a key sign the person is not who they claim.'),
+  _Rule(CueCategory.romance, r"\b(wrong number|salah nombor|saved the wrong (number|contact))\b.{0,120}\b(be friends|berkawan|kenal|get to know|keep chatting)\b", 12,
+      'Friendly "wrong number" opener', 'Many love and investment scams start with a "wrong number" message that turns into a friendly chat.'),
+  // Apps sent as links
+  _Rule(CueCategory.link, r'\b(download|install|muat turun|pasang)\b.{0,40}\b(app|apk|aplikasi)\b.{0,40}\b(link|pautan|here|sini)\b|\.apk\b', 14,
+      'Asks you to install an app from a link', 'Apps sent by message can read your SMS codes and take over your bank account. Only install apps from the official store.'),
   // Impersonation of known contacts
   _Rule(CueCategory.impersonation, r"\b(this is my new number|nombor baru|i changed my number|lost my phone|phone (rosak|spoiled|broken)|it'?s me,? (your|ur))\b", 12,
       'Claims a new number', '"New number" messages are how scammers pretend to be friends or family.'),

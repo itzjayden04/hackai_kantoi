@@ -44,15 +44,72 @@ const telegram = Channel('telegram', 'Report on Telegram',
     'Telegram removes scam accounts reported to its official @notoscam account.', ChannelKind.inApp,
     target: 'https://t.me/notoscam', steps: ['Open the chat and tap "Report".', 'Or forward the evidence to @notoscam.']);
 
+const facebook = Channel('facebook', 'Report on Facebook or Messenger',
+    'Facebook removes scam profiles and pages that are reported, and blocking stops them reaching you.', ChannelKind.inApp,
+    steps: [
+      'On their profile, tap ⋯ (More) under their name, then "Report profile".',
+      'Choose the reason about a scam or fraud, then follow the steps to submit.',
+      'In Messenger: open the chat, tap their name, tap "Report", then choose scam or fraud.',
+      'Block them from the same menu.',
+    ]);
+const instagram = Channel('instagram', 'Report on Instagram',
+    'Instagram removes scam and fake accounts that are reported.', ChannelKind.inApp,
+    steps: [
+      'Open their profile and tap ⋯ at the top right.',
+      'Tap "Report", then choose the reason about a scam or fraud (or "Pretending to be someone" for a fake account).',
+      'For a direct message: press and hold the message, then tap "Report".',
+      'Block them from the same menu.',
+    ]);
+const tiktok = Channel('tiktok', 'Report on TikTok',
+    'TikTok removes accounts reported for frauds and scams.', ChannelKind.inApp,
+    steps: [
+      'Open their profile and tap the share arrow at the top right.',
+      'Tap "Report", then "Report account", and choose "Frauds and scams".',
+      'For a direct message: press and hold the message, then tap "Report".',
+      'Block them from their profile.',
+    ]);
+
+/// Where the scammer contacted the user, which decides the platform channel.
+enum ContactPlatform { whatsapp, telegram, facebook, instagram, tiktok, smsOrCall, other }
+
+const platformLabels = {
+  ContactPlatform.whatsapp: 'WhatsApp',
+  ContactPlatform.telegram: 'Telegram',
+  ContactPlatform.facebook: 'Facebook or Messenger',
+  ContactPlatform.instagram: 'Instagram',
+  ContactPlatform.tiktok: 'TikTok',
+  ContactPlatform.smsOrCall: 'SMS or phone call',
+  ContactPlatform.other: 'Somewhere else',
+};
+
+ContactPlatform platformFor(Source? source) => switch (source) {
+      Source.telegramWeb => ContactPlatform.telegram,
+      Source.whatsappWeb || Source.chatExport => ContactPlatform.whatsapp,
+      _ => ContactPlatform.whatsapp,
+    };
+
+Channel? platformChannel(ContactPlatform p) => switch (p) {
+      ContactPlatform.whatsapp => whatsapp,
+      ContactPlatform.telegram => telegram,
+      ContactPlatform.facebook => facebook,
+      ContactPlatform.instagram => instagram,
+      ContactPlatform.tiktok => tiktok,
+      ContactPlatform.smsOrCall => mcmc,
+      ContactPlatform.other => null,
+    };
+
 /// Channels in the order the victim should use them.
-List<Channel> channelsFor(Situation s, {Source? source}) {
-  final platform = source == Source.telegramWeb ? telegram : whatsapp;
-  return switch (s) {
-    Situation.lostMoney => [nsrc, bank, police, semakMule, platform],
-    Situation.sharedDetails => [bank, nsrc, police, platform],
+List<Channel> channelsFor(Situation s, {Source? source, ContactPlatform? platform}) {
+  final p = platformChannel(platform ?? platformFor(source));
+  final out = switch (s) {
+    Situation.lostMoney => [nsrc, bank, police, semakMule, ?p],
+    Situation.sharedDetails => [bank, nsrc, police, ?p],
     Situation.installedApp => [bank, nsrc, police],
-    Situation.onlyReceived => [platform, mcmc, semakMule],
+    Situation.onlyReceived => [?p, mcmc, semakMule],
   };
+  // MCMC can appear twice when the platform is SMS; keep the first.
+  final seen = <String>{};
+  return out.where((c) => seen.add(c.id)).toList();
 }
 
 class ReportDetails {
@@ -62,6 +119,86 @@ class ReportDetails {
   String paidTo = '';
   String paidFromBank = '';
   String contactMethod = '';
+  String scammerBank = '';
+}
+
+/// One field of a report form, with a copy button in the UI.
+class PackField {
+  final String label;
+  final String value;
+  const PackField(this.label, this.value);
+}
+
+const _situationSentence = {
+  Situation.lostMoney: 'I lost money to this scam.',
+  Situation.sharedDetails: 'I gave my login, OTP or card details to them.',
+  Situation.installedApp: 'I installed an app they sent me.',
+  Situation.onlyReceived: 'I did not pay or share any details.',
+};
+
+/// A short description in plain sentences, for the "description" box of any
+/// report form. [scamText] is already redacted.
+String incidentDescription(Investigation inv, ReportDetails d, Situation s) {
+  final v = inv.verdict;
+  final how = d.contactMethod.isEmpty ? '' : ' on ${d.contactMethod}';
+  final signs = inv.findings.where((f) => f.isRisk).map((f) => f.title.toLowerCase()).toSet().take(3).toList();
+  final b = StringBuffer('${d.when.isEmpty ? 'Recently' : 'On ${d.when}'}, I was contacted$how by someone '
+      'running what looks like a ${v.scamType.toLowerCase()}. ${_situationSentence[s]}');
+  if (s == Situation.lostMoney && (d.amount.isNotEmpty || d.paidTo.isNotEmpty)) {
+    b.write(' I transferred ${d.amount.isEmpty ? 'money' : d.amount}');
+    if (d.paidFromBank.isNotEmpty) b.write(' from my ${d.paidFromBank} account');
+    if (d.paidTo.isNotEmpty) b.write(' to account ${d.paidTo}');
+    if (d.scammerBank.isNotEmpty) b.write(' (${d.scammerBank})');
+    b.write('.');
+    if (d.transactionRef.isNotEmpty) b.write(' The transaction reference is ${d.transactionRef}.');
+  }
+  if (signs.isNotEmpty) b.write(' Warning signs: ${signs.join(', ')}.');
+  return b.toString();
+}
+
+/// The fields each channel's form asks for, in the order it asks for them.
+/// Empty fields are left out.
+List<PackField> reportPack(Channel c, Investigation inv, ReportDetails d, Situation s, String scamText) {
+  final ents = inv.artefact.entities;
+  String list(EntityType t) => ents.where((e) => e.type == t).map((e) => e.value).toSet().join(', ');
+  final account = d.paidTo.isNotEmpty ? d.paidTo : list(EntityType.bankAccount);
+  final profile = [list(EntityType.handle), list(EntityType.phone), list(EntityType.url)].where((x) => x.isNotEmpty).join(', ');
+  final f = <String, String>{
+    'amount': d.amount,
+    'date': d.when,
+    'bank': d.paidFromBank,
+    'account': account,
+    'scammerBank': d.scammerBank,
+    'reference': d.transactionRef,
+    'phone': list(EntityType.phone),
+    'link': list(EntityType.url),
+    'profile': profile,
+    'how': d.contactMethod,
+    'description': incidentDescription(inv, d, s),
+    'message': scamText,
+  };
+  const labels = {
+    'amount': 'Amount',
+    'date': 'Date and time',
+    'bank': 'Your bank',
+    'account': "Scammer's account number",
+    'scammerBank': "Scammer's bank",
+    'reference': 'Transaction reference',
+    'phone': "Scammer's phone number",
+    'link': 'Scam link',
+    'profile': 'Their profile, number or link',
+    'how': 'How they contacted you',
+    'description': 'Description',
+    'message': 'The scam message (your details hidden)',
+  };
+  final order = switch (c.id) {
+    'nsrc' || 'bank' => ['amount', 'date', 'bank', 'account', 'scammerBank', 'reference', 'description'],
+    'police' => ['date', 'how', 'description', 'amount', 'bank', 'account', 'scammerBank', 'reference', 'phone', 'link', 'message'],
+    'semakmule' => ['account', 'phone'],
+    'mcmc' => ['phone', 'link', 'date', 'description', 'message'],
+    _ => ['profile', 'description', 'message'],
+  };
+  return [for (final k in order) if (f[k]!.trim().isNotEmpty) PackField(labels[k]!, f[k]!.trim())];
 }
 
 /// The report text shared with every channel. [scamText] is already redacted.

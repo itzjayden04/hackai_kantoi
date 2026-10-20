@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'bridge/bridge.dart';
 import 'engine/models.dart';
+import 'local_store.dart';
 import 'state.dart';
+import 'ui/case_tracker.dart';
 import 'ui/check_page.dart';
 import 'ui/emergency_page.dart';
 import 'ui/intel_page.dart';
@@ -16,6 +18,7 @@ import 'ui/theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await appState.load();
+  await localStore.load();
   await startBridge();
   runApp(const KantoiApp());
 }
@@ -106,7 +109,11 @@ class _ShellState extends State<Shell> {
       return i == 2 && liveBadge > 0 ? Badge(label: Text('$liveBadge'), child: ic) : ic;
     }
 
-    final body = SafeArea(child: KeyedSubtree(key: ValueKey(_tab), child: _page));
+    final body = SafeArea(
+        child: Column(children: [
+      const CaseReminderBanner(),
+      Expanded(child: KeyedSubtree(key: ValueKey(_tab), child: _page)),
+    ]));
     if (wide) {
       return Scaffold(
         body: Row(children: [
