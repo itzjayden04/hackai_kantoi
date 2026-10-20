@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../engine/models.dart';
 import 'activity_log.dart';
 import 'emergency_page.dart';
+import 'explainer_card.dart';
+import 'guardian_ui.dart';
 import 'report_page.dart';
 import 'theme.dart';
+import 'warning_image.dart';
 
 class ResultView extends StatelessWidget {
   final Investigation inv;
@@ -23,6 +25,7 @@ class ResultView extends StatelessWidget {
       VerdictCard(verdict: v),
       const SizedBox(height: 12),
       _Actions(inv: inv),
+      ExplainerTile(inv: inv),
       if (topRisks.isNotEmpty || legit.isNotEmpty) ...[
         const SectionTitle('Why'),
         HighlightedText(text: inv.artefact.text, findings: inv.findings),
@@ -135,11 +138,9 @@ class _Actions extends StatelessWidget {
       OutlinedButton.icon(
         icon: const Icon(Icons.share_rounded),
         label: const Text('Warn family'),
-        onPressed: () {
-          Clipboard.setData(ClipboardData(text: shareWarning(inv)));
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Warning copied. Paste it into your family chat.')));
-        },
+        onPressed: () => showWarnFamily(context, inv, shareWarning(inv)),
       ),
+      if (inv.verdict.level == RiskLevel.danger) GuardianAlertButton(inv: inv),
     ]);
   }
 }

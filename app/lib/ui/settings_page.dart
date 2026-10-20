@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../engine/llm.dart';
 import '../state.dart';
+import 'guardian_ui.dart';
 import 'theme.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -122,6 +123,8 @@ class _SettingsPageState extends State<SettingsPage> {
       TextField(controller: _own, decoration: const InputDecoration(hintText: 'e.g. Tan Mei Ling, 012-345 6789')),
       const SizedBox(height: 20),
       FilledButton(onPressed: _save, child: const Text('Save settings')),
+      const SectionTitle('Family guardian'),
+      const GuardianStatusTile(),
       const SectionTitle('Privacy'),
       Text(
         '• Message checks, redaction and relationship scoring run on your device.\n'

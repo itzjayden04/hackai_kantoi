@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../engine/models.dart';
 import '../engine/report.dart';
+import 'guardian_ui.dart';
 import 'report_page.dart';
 import 'theme.dart';
 
@@ -60,6 +61,8 @@ class _EmergencyPageState extends State<EmergencyPage> {
       ),
       const SizedBox(height: 6),
       Text('On a computer? Dial 997 from your phone.', style: t.bodySmall, textAlign: TextAlign.center),
+      const SizedBox(height: 10),
+      GuardianAlertButton(inv: widget.inv, emergency: true),
       const SectionTitle('What to say on the call'),
       _field('How much did you send?', 'RM 1,500', (v) => _d.amount = v),
       _field('When?', 'Today 3:20pm', (v) => _d.when = v),
