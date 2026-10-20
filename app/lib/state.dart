@@ -75,6 +75,24 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Drops checks and live items older than [cutoff] (data retention).
+  void dropOlderThan(DateTime cutoff) {
+    final before = history.length + live.length;
+    history.removeWhere((i) => i.artefact.receivedAt.isBefore(cutoff));
+    live.removeWhere((i) => i.at.isBefore(cutoff));
+    if (history.length + live.length != before) notifyListeners();
+  }
+
+  /// Forgets everything held in memory ("Delete all my Kantoi data"). The
+  /// AI key built into the app is a constant, so it stays.
+  void forgetAll() {
+    llm = LlmConfig.defaults;
+    ownDetails = {};
+    history.clear();
+    live.clear();
+    notifyListeners();
+  }
+
   void setServerError(String e) {
     serverError = e;
     notifyListeners();
