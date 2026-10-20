@@ -2,7 +2,6 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-import 'engine/models.dart';
 import 'guard/guard_background.dart';
 import 'guard/guard_control.dart';
 import 'local_store.dart';
@@ -10,13 +9,13 @@ import 'intake/share_intake.dart';
 import 'intake/telegram_bot.dart';
 import 'state.dart';
 import 'ui/case_tracker.dart';
+import 'ui/check/result_page.dart';
 import 'ui/check_page.dart';
 import 'ui/emergency_page.dart';
 import 'ui/intel_page.dart';
 import 'ui/kit.dart';
 import 'ui/learn_page.dart';
 import 'ui/protection_page.dart';
-import 'ui/result_view.dart';
 import 'ui/settings_page.dart';
 import 'ui/setup_page.dart';
 import 'ui/theme.dart';
@@ -82,7 +81,7 @@ class _ShellState extends State<Shell> {
   @override
   void initState() {
     super.initState();
-    appState.openResult = (inv) => navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => ResultScreen(inv: inv)));
+    appState.openResult = (inv) => navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => ResultPage(inv: inv)));
     appState.tab.addListener(_onTab);
     listenForShares(() => appState.tab.value = 0);
   }
@@ -282,14 +281,3 @@ class _ProtectedPillState extends State<ProtectedPill> with WidgetsBindingObserv
   }
 }
 
-/// A full check opened on its own screen (from history, a notification or
-/// a deep link).
-class ResultScreen extends StatelessWidget {
-  final Investigation inv;
-  const ResultScreen({super.key, required this.inv});
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Result')),
-        body: PageBody(children: [ResultView(inv: inv)]),
-      );
-}

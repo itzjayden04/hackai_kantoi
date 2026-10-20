@@ -434,11 +434,11 @@ class _PipelineViewState extends State<PipelineView> with SingleTickerProviderSt
             if (byStage[st] != null)
               for (final (i, s) in byStage[st]!.indexed) _ToolRow(step: s, stage: i == 0 ? st : null),
           const SizedBox(height: 4),
-          Row(children: [
+          Wrap(spacing: 4, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
             const Icon(Icons.lock_outline_rounded, size: 14, color: K.outline),
             const SizedBox(width: 4),
             Text('on this phone', style: t.labelSmall?.copyWith(color: K.outline)),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             const Icon(Icons.cloud_outlined, size: 14, color: K.outline),
             const SizedBox(width: 4),
             Text('went online (personal details hidden)', style: t.labelSmall?.copyWith(color: K.outline)),
