@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Kantoi: Scam Guard for WhatsApp and Telegram Web",
+  "short_name": "Kantoi",
+  "version": "1.0.0",
+  "description": "Checks every message you receive in WhatsApp Web and Telegram Web for scam signs, using the Kantoi app on your computer.",
+  "permissions": ["contextMenus", "storage"],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "https://web.telegram.org/*",
+    "http://127.0.0.1:47821/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*", "https://web.telegram.org/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": { "default_popup": "popup.html", "default_title": "Kantoi" },
+  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" }
+}

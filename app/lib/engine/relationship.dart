@@ -148,6 +148,10 @@ const _originWeight = {
   Origin.telegramGroup: 14,
 };
 
+final _wrongNumber = RegExp(
+    r"\b(wrong (number|person|chat)|salah (nombor|orang)|sorry,? (who is this|is this not)|got your (number|contact) from|added you by mistake|is this (mr|ms|miss|mrs|encik|puan)\b)",
+    caseSensitive: false);
+
 /// Scores a conversation for how closely the other person's behaviour follows
 /// a scam script rather than a genuine relationship. Only the other person's
 /// messages are scored.
@@ -163,6 +167,12 @@ RelationshipReport analyzeConversation(List<ChatMessage> msgs,
     raw += s.weight;
   }
 
+  // A "wrong number" opener is the classic start of a pig-butchering script,
+  // so infer the origin when the user hasn't told us.
+  if (origin == Origin.unknown && msgs.take(4).any((m) => !m.fromMe && _wrongNumber.hasMatch(m.text))) {
+    addSignal(const RelSignal('Origin', 'Started with a "wrong number" message',
+        'Many investment and romance scams open by pretending to message the wrong person.', 18));
+  }
   final ow = _originWeight[origin]!;
   if (ow != 0) {
     addSignal(RelSignal('Origin', originLabels[origin]!,

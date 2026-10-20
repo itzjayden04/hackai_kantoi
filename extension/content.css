@@ -1,0 +1,32 @@
+.kantoi-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin: 4px 0 2px; padding: 2px 8px; border-radius: 999px;
+  font: 600 11.5px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  cursor: pointer; user-select: none; border: 1px solid transparent;
+}
+.kantoi-badge:hover { filter: brightness(0.95); }
+.kantoi-safe { display: none; }
+.kantoi-caution { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+.kantoi-suspicious { background: #ffedd5; color: #9a3412; border-color: #fdba74; }
+.kantoi-danger { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+
+#kantoi-panel {
+  position: fixed; right: 18px; bottom: 18px; z-index: 2147483647; width: 300px;
+  background: #fff; color: #111827; border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.18); border: 1px solid #e5e7eb;
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden;
+}
+#kantoi-panel.kantoi-min .kantoi-body { display: none; }
+#kantoi-panel .kantoi-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #1e3a8a; color: #fff; cursor: pointer; }
+#kantoi-panel .kantoi-head b { flex: 1; font-size: 14px; }
+#kantoi-panel .kantoi-dot { width: 10px; height: 10px; border-radius: 50%; background: #9ca3af; }
+#kantoi-panel .kantoi-body { padding: 12px; }
+#kantoi-panel .kantoi-score { display: flex; align-items: baseline; gap: 8px; }
+#kantoi-panel .kantoi-score .n { font-size: 30px; font-weight: 800; }
+#kantoi-panel .kantoi-bar { height: 6px; border-radius: 3px; background: #e5e7eb; margin: 6px 0 10px; overflow: hidden; }
+#kantoi-panel .kantoi-bar > div { height: 100%; width: 0; transition: width .4s, background .4s; }
+#kantoi-panel ul { margin: 6px 0 8px; padding-left: 18px; }
+#kantoi-panel li { margin-bottom: 3px; }
+#kantoi-panel select, #kantoi-panel button { font: inherit; width: 100%; margin-top: 6px; padding: 7px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; }
+#kantoi-panel button.primary { background: #1e3a8a; color: #fff; border: none; font-weight: 600; cursor: pointer; }
+#kantoi-panel .muted { color: #6b7280; font-size: 12px; }

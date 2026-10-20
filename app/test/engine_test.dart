@@ -88,4 +88,12 @@ void main() {
     final r = analyzeConversation(parseChatExport(chat, me: 'Me'), origin: Origin.inPerson);
     expect(r.level, RiskLevel.safe, reason: '${r.score}');
   });
+
+  test('a wrong-number opener is treated as a stranger reaching out', () {
+    final r = analyzeConversation(const [
+      ChatMessage(time: null, sender: 'Amanda', text: 'Hi, is this Mr Tan? Sorry, wrong number!', fromMe: false),
+      ChatMessage(time: null, sender: 'Me', text: 'No problem', fromMe: true),
+    ]);
+    expect(r.signals.any((s) => s.title.contains('wrong number')), isTrue);
+  });
 }
