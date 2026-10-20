@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:http/http.dart' as http;
 
+import 'attribution/attribution.dart';
 import 'cues.dart';
 import 'entities.dart';
 import 'forensics/allowlist.dart';
@@ -148,6 +149,13 @@ Future<Investigation> investigate(
   findings.addAll(legitFindings);
   done(legitStep, legitFindings.isEmpty ? 'No official sender or genuine template matched' : 'Matched: ${legitFindings.map((f) => f.title).join(', ')}');
 
+  // 3b. Threat intel: known campaigns and reported accounts.
+  final attribution = await attributeArtefact(artefact, reports, network: options.network, log: (tool, action, {sentOffDevice = false}) {
+    return step(tool, action, sentOffDevice: sentOffDevice);
+  });
+  findings.addAll(attribution.findings);
+  onStep?.call(List.of(log));
+
   // 4. AI analyst, on a redacted copy.
   Map<String, dynamic>? ai;
   if (options.llm.usable) {
@@ -217,7 +225,7 @@ Future<Investigation> investigate(
   final verdict = _verdict(findings, reports, ai, log, entities);
   done(scoreStep, '${verdict.score}/100, ${riskLabel(verdict.level)} (confidence ${verdict.confidence}%)');
 
-  return Investigation(artefact: artefact, findings: findings, log: log, verdict: verdict, urls: reports, script: textForensics.script);
+  return Investigation(artefact: artefact, findings: findings, log: log, verdict: verdict, urls: reports, script: textForensics.script, attribution: attribution);
 }
 
 String _entityName(EntityType t) => switch (t) {

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../engine/attribution/intel_store.dart';
 import '../engine/models.dart';
 import '../engine/redaction.dart';
 import '../engine/report.dart';
@@ -116,6 +117,7 @@ class _ReportPageState extends State<ReportPage> {
             Expanded(child: Text('Approved. Send it through these channels, in this order:', style: t.titleSmall)),
           ]),
           const SizedBox(height: 12),
+          _ShareToMap(inv: widget.inv, hidden: {for (var i = 0; i < _pii.length; i++) if (!_keep.contains(i)) _pii[i].value}),
           for (final (i, c) in channelsFor(_situation, source: widget.inv.artefact.source).indexed)
             ChannelCard(index: i + 1, channel: c, report: _report, details: _details, inv: widget.inv),
           const SizedBox(height: 8),
@@ -213,4 +215,44 @@ class ChannelCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Consent to add the scammer's details from this report to the Kantoi scam
+/// map on this device. Off until the user ticks it.
+class _ShareToMap extends StatefulWidget {
+  final Investigation inv;
+  final Set<String> hidden;
+  const _ShareToMap({required this.inv, required this.hidden});
+  @override
+  State<_ShareToMap> createState() => _ShareToMapState();
+}
+
+class _ShareToMapState extends State<_ShareToMap> {
+  late bool _on = intel.hasReport(widget.inv);
+
+  void _set(bool v) {
+    if (v) {
+      final r = intel.addCommunityReport(widget.inv, exclude: widget.hidden, ownValues: appState.ownDetails);
+      if (r == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not enough evidence in this message to add it to the scam map.')));
+        return;
+      }
+    } else {
+      intel.removeReport(widget.inv);
+    }
+    setState(() => _on = v);
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Card(
+          child: CheckboxListTile(
+            value: _on,
+            onChanged: (v) => _set(v ?? false),
+            title: const Text("Add the scammer's links, numbers and accounts to the Kantoi scam map"),
+            subtitle: const Text('Helps link this scam to others. Your hidden personal details are never added. You can untick this later.'),
+          ),
+        ),
+      );
 }

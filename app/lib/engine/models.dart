@@ -1,6 +1,8 @@
 /// Core data types shared by every part of the Kantoi engine.
 library;
 
+import 'attribution/intel_models.dart' show AttributionResult;
+
 enum Source { paste, whatsappWeb, telegramWeb, screenshot, qr, chatExport, questionnaire }
 
 enum EntityType { url, phone, bankAccount, email, cryptoWallet, amount, handle }
@@ -49,6 +51,7 @@ enum CueCategory {
   obfuscation,
   aiManipulation,
   legitimacy,
+  knownScam,
 }
 
 String cueLabel(CueCategory c) => switch (c) {
@@ -67,6 +70,7 @@ String cueLabel(CueCategory c) => switch (c) {
       CueCategory.obfuscation => 'Hidden or disguised text',
       CueCategory.aiManipulation => 'Tries to trick AI checkers',
       CueCategory.legitimacy => 'Sign of legitimacy',
+      CueCategory.knownScam => 'Known scam',
     };
 
 /// One piece of evidence. [weight] is positive for risk, negative for
@@ -182,6 +186,7 @@ class Investigation {
   final List<UrlReport> urls;
   /// Which known scam script the message follows, and how far along it is.
   final ScriptProgress? script;
+  final AttributionResult? attribution;
   const Investigation({
     required this.artefact,
     required this.findings,
@@ -189,6 +194,7 @@ class Investigation {
     required this.verdict,
     required this.urls,
     this.script,
+    this.attribution,
   });
 
   Map<String, dynamic> toJson() => {
@@ -199,6 +205,7 @@ class Investigation {
         'entities': artefact.entities.map((e) => e.toJson()).toList(),
         'urls': urls.map((u) => u.toJson()).toList(),
         if (script != null) 'script': script!.toJson(),
+        'attribution': ?attribution?.toJson(),
       };
 }
 

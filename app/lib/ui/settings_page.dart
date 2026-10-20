@@ -4,6 +4,7 @@ import '../engine/llm.dart';
 import '../state.dart';
 import 'forensic_settings.dart';
 import 'guardian_ui.dart';
+import 'intel_page.dart' show IntelSettingsSection;
 import 'theme.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -129,6 +130,7 @@ class _SettingsPageState extends State<SettingsPage> {
       FilledButton(onPressed: _save, child: const Text('Save settings')),
       const SectionTitle('Family guardian'),
       const GuardianStatusTile(),
+      const IntelSettingsSection(),
       const SectionTitle('Privacy'),
       Text(
         '• Message checks, redaction and relationship scoring run on your device.\n'
