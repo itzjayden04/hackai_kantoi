@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'bridge/bridge.dart';
 import 'engine/models.dart';
+import 'guard/guard_background.dart';
+import 'guard/guard_control.dart';
 import 'local_store.dart';
 import 'intake/share_intake.dart';
 import 'intake/telegram_bot.dart';
@@ -25,6 +27,11 @@ Future<void> main() async {
   await startTelegramBot();
   runApp(const KantoiApp());
 }
+
+/// Entry point for Android phone protection, started by the native side
+/// without any screen.
+@pragma('vm:entry-point')
+Future<void> guardMain() => runGuardBackground();
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -141,8 +148,8 @@ class _ShellState extends State<Shell> {
     final sel = bottom.indexOf(_tab);
     return Scaffold(
       appBar: AppBar(title: const _Logo(), centerTitle: false, actions: [
-        if (appState.extensionConnected || appState.live.isNotEmpty)
-          IconButton(tooltip: 'Live', onPressed: () => setState(() => _tab = 2), icon: icon(2)),
+        if (guardSupported || appState.extensionConnected || appState.live.isNotEmpty)
+          IconButton(tooltip: guardSupported ? 'Phone protection' : 'Live', onPressed: () => setState(() => _tab = 2), icon: icon(2)),
         IconButton(tooltip: 'Settings', onPressed: () => setState(() => _tab = 6), icon: Icon(_dests[6].$1)),
       ]),
       body: body,

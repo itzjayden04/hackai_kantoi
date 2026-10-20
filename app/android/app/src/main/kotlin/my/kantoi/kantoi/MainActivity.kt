@@ -1,9 +1,11 @@
 package my.kantoi.kantoi
 
+import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
+import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -25,6 +27,62 @@ class MainActivity : FlutterActivity() {
                     result.notImplemented()
                 }
             }
+        }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "kantoi/guard").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "status" -> result.success(
+                    mapOf(
+                        "enabled" to GuardEngine.isEnabled(this),
+                        "notifications" to listenerOn(),
+                        "overlay" to (Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this)),
+                        "accessibility" to accessibilityOn(),
+                        "recent" to GuardEngine.recent(this),
+                    ),
+                )
+                "enable" -> {
+                    GuardEngine.setEnabled(this, call.arguments == true)
+                    result.success(null)
+                }
+                "open" -> {
+                    openSetting(call.arguments as? String)
+                    result.success(null)
+                }
+                "preview" -> {
+                    PauseOverlay.preview(this)
+                    result.success(null)
+                }
+                "clear" -> {
+                    GuardEngine.clearRecent(this)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    private fun listenerOn(): Boolean {
+        val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: return false
+        val me = ComponentName(this, GuardNotificationListener::class.java)
+        return flat.split(":").any { ComponentName.unflattenFromString(it) == me }
+    }
+
+    private fun accessibilityOn(): Boolean {
+        val flat = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
+        val me = ComponentName(this, GuardAccessibilityService::class.java)
+        return flat.split(":").any { ComponentName.unflattenFromString(it) == me }
+    }
+
+    private fun openSetting(which: String?) {
+        val i = when (which) {
+            "notifications" -> Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+            "overlay" -> Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+            "accessibility" -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            else -> return
+        }
+        try {
+            startActivity(i)
+        } catch (e: Exception) {
+            startActivity(Intent(Settings.ACTION_SETTINGS))
         }
     }
 
