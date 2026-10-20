@@ -69,7 +69,8 @@ class IntakeResult {
   const IntakeResult({required this.text, required this.kind, required this.source, required this.extras, this.note});
 }
 
-typedef ConsentAsker = Future<bool> Function();
+/// Asks the user before [what] ("recording", "video" or "PDF") is sent to the AI.
+typedef ConsentAsker = Future<bool> Function(String what);
 
 /// Works out the kind from magic bytes first, then the name and mime type.
 IntakeKind detectKind({Uint8List? bytes, String? name, String? mime, String? text}) {
@@ -137,6 +138,7 @@ Future<IntakeResult> routeInput({
   Uint8List? bytes,
   String? name,
   String? mime,
+  IntakeKind? forceKind,
   Source? source,
   LlmConfig llm = LlmConfig.defaults,
   String? situation,
@@ -160,7 +162,7 @@ Future<IntakeResult> routeInput({
     onStep?.call(List.of(log));
   }
 
-  final kind = detectKind(bytes: bytes, name: name, mime: mime, text: text);
+  final kind = forceKind ?? detectKind(bytes: bytes, name: name, mime: mime, text: text);
   final label = name == null ? kindLabel(kind) : '${kindLabel(kind)} "$name"';
   final route = step('Intake router', 'Working out what this is');
   done(route, bytes == null ? '$label, ${text?.length ?? 0} characters' : '$label, ${_size(bytes.length)}. ${_plan(kind)}');
@@ -190,7 +192,7 @@ Future<IntakeResult> routeInput({
     }
   }
 
-  Future<bool> consent() async => askConsent == null ? false : await askConsent();
+  Future<bool> consent(String what) async => askConsent == null ? false : await askConsent(what);
 
   Future<void> extract() async {
     switch (kind) {
@@ -250,7 +252,7 @@ Future<IntakeResult> routeInput({
           done(step('Speech to text', 'Turning the $what into text'), 'Skipped: needs Gemini', StepStatus.skipped);
           throw IntakeError('Turning a $what into text needs Gemini, which is not set up. Type what was said into the box instead, or set up Gemini in Settings.');
         }
-        if (!await consent()) {
+        if (!await consent(what)) {
           done(step('Speech to text', 'Turning the $what into text'), 'Skipped: you chose not to send it', StepStatus.skipped);
           throw IntakeError('The $what was not sent. You can type what was said into the box instead.');
         }
@@ -404,7 +406,7 @@ Future<String> _pdf(Uint8List bytes, LlmConfig llm, ConsentAsker consent, List<F
   done(s, '${p.pages} page(s), ${p.links.length} link(s)${active.isEmpty ? ', no scripts' : ', has ${active.join(', ')}'}');
   var text = p.textReliable ? p.text : '';
   if (text.isEmpty) {
-    if (canReadMedia(llm) && await consent()) {
+    if (canReadMedia(llm) && await consent('PDF')) {
       final a = step('Document reader', 'Sending the PDF you chose to ${llm.displayName} to read its words (you agreed to this)', sentOffDevice: true);
       try {
         text = await readDocumentWithAi(bytes, llm);

@@ -1,10 +1,9 @@
-import 'dart:convert';
-
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../engine/models.dart';
 import '../engine/relationship.dart';
+import '../intake/chat_export.dart';
 import 'theme.dart';
 
 class RelationshipPage extends StatefulWidget {
@@ -26,7 +25,7 @@ class _RelationshipPageState extends State<RelationshipPage> {
   List<String> get _senders => _msgs.map((m) => m.sender).toSet().toList();
 
   void _parse() {
-    final msgs = parseChatExport(_chat.text);
+    final msgs = parseAnyChatExport(_chat.text);
     setState(() {
       _msgs = msgs;
       _report = null;
@@ -44,10 +43,10 @@ class _RelationshipPageState extends State<RelationshipPage> {
 
   Future<void> _open() async {
     final f = await openFile(acceptedTypeGroups: const [
-      XTypeGroup(label: 'Chat export', extensions: ['txt'])
+      XTypeGroup(label: 'Chat export', extensions: ['txt', 'json', 'zip'])
     ]);
     if (f == null) return;
-    _chat.text = utf8.decode(await f.readAsBytes(), allowMalformed: true);
+    _chat.text = chatExportText(await f.readAsBytes());
     _parse();
   }
 

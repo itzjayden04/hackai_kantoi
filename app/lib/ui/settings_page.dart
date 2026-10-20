@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../engine/llm.dart';
 import '../state.dart';
+import 'intake_widgets.dart';
 import 'theme.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -122,10 +123,12 @@ class _SettingsPageState extends State<SettingsPage> {
       TextField(controller: _own, decoration: const InputDecoration(hintText: 'e.g. Tan Mei Ling, 012-345 6789')),
       const SizedBox(height: 20),
       FilledButton(onPressed: _save, child: const Text('Save settings')),
+      const IntakeSettingsSection(),
       const SectionTitle('Privacy'),
       Text(
         '• Message checks, redaction and relationship scoring run on your device.\n'
         '• Only links (to see where they go and how old the website is) and masked text for AI explanations go online.\n'
+        '• Files are read on your device. Only their fingerprint is checked online, unless you agree to send a recording to Gemini.\n'
         '• The activity log shows a cloud icon on every step that went online.\n'
         '• Nothing is reported anywhere until you approve it.',
         style: t.bodyMedium?.copyWith(height: 1.6),

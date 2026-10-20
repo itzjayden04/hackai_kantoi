@@ -54,15 +54,20 @@ String telegramText(Object? t) {
 String chatExportText(Uint8List bytes) {
   var raw = bytes;
   if (bytes.length > 4 && bytes[0] == 0x50 && bytes[1] == 0x4B) {
-    final zip = ZipDecoder().decodeBytes(bytes);
-    final f = zip.files.where((f) => f.isFile && (f.name.endsWith('.txt') || f.name.endsWith('.json'))).firstOrNull;
-    if (f == null) throw const FormatException('No chat file inside this zip');
-    raw = f.content;
+    try {
+      final zip = ZipDecoder().decodeBytes(bytes);
+      final f = zip.files.where((f) => f.isFile && (f.name.endsWith('.txt') || f.name.endsWith('.json'))).firstOrNull;
+      if (f != null) raw = f.content;
+    } catch (_) {}
   }
   final text = utf8.decode(raw, allowMalformed: true);
   final t = text.trimLeft();
   if (!t.startsWith('{')) return text;
-  return parseTelegramExport(t).map(chatLine).join('\n');
+  try {
+    return parseTelegramExport(t).map(chatLine).join('\n');
+  } catch (_) {
+    return text;
+  }
 }
 
 String _two(int n) => n.toString().padLeft(2, '0');

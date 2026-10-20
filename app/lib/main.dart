@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'bridge/bridge.dart';
 import 'engine/models.dart';
+import 'intake/share_intake.dart';
+import 'intake/telegram_bot.dart';
 import 'state.dart';
 import 'ui/check_page.dart';
 import 'ui/emergency_page.dart';
@@ -17,6 +19,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await appState.load();
   await startBridge();
+  await startTelegramBot();
   runApp(const KantoiApp());
 }
 
@@ -62,6 +65,7 @@ class _ShellState extends State<Shell> {
     appState.openResult = (inv) => navigatorKey.currentState?.push(MaterialPageRoute(
         builder: (_) => Scaffold(appBar: AppBar(title: const Text('Kantoi check')), body: _ResultPage(inv: inv))));
     appState.addListener(_onState);
+    listenForShares(() => setState(() => _tab = 0));
   }
 
   void _onState() {

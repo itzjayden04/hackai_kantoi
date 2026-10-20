@@ -47,3 +47,8 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // On-device OCR for Chinese text in screenshots (Latin is bundled with the plugin).
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
+}

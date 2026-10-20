@@ -20,6 +20,7 @@ import 'package:kantoi/intake/language.dart';
 import 'package:kantoi/intake/normalise.dart';
 import 'package:kantoi/intake/pdf.dart';
 import 'package:kantoi/intake/router.dart';
+import 'package:kantoi/intake/telegram_bot.dart';
 import 'package:zxing2/qrcode.dart';
 
 const offline = InvestigateOptions(llm: LlmConfig(kind: LlmKind.none), network: false);
@@ -370,5 +371,14 @@ void main() {
     expect(
         () => routeInput(bytes: Uint8List.fromList([0x4F, 0x67, 0x67, 0x53, 1, 2, 3, 4]), name: 'a.opus', llm: const LlmConfig(kind: LlmKind.none), network: false),
         throwsA(isA<IntakeError>().having((e) => e.message, 'message', contains('Type what was said'))));
+  });
+
+  test('Telegram bot reply has verdict, reasons and next step', () async {
+    final inv = await investigate('This is Inspector Lim from PDRM. Your IC is linked to money laundering. Transfer to this safe account now.', options: offline);
+    final msg = botReply(inv);
+    expect(msg, startsWith('Kantoi: Very likely a scam'));
+    expect(msg, contains('Why:'));
+    expect(msg, contains('What to do:'));
+    expect(msg, contains('997'));
   });
 }
