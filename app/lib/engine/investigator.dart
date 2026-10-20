@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 
 import 'attribution/attribution.dart';
+import '../intake/language.dart';
 import 'cues.dart';
 import 'entities.dart';
 import 'forensics/allowlist.dart';
@@ -61,8 +62,9 @@ Future<Investigation> investigate(
   String? sender,
   InvestigateOptions options = const InvestigateOptions(),
   void Function(List<LogStep>)? onStep,
+  IntakeExtras? extras,
 }) async {
-  final log = <LogStep>[];
+  final log = <LogStep>[...?extras?.steps];
   LogStep step(String tool, String action, {bool sentOffDevice = false}) {
     final s = LogStep(tool: tool, action: action, sentOffDevice: sentOffDevice);
     log.add(s);
@@ -79,19 +81,33 @@ Future<Investigation> investigate(
 
   // 1. Route and extract (on the device).
   final route = step('Router', 'Reading the item');
-  final entities = extractEntities(text);
+  final entities = extractEntities(text)
+    ..addAll(extras?.entities ?? const [])
+    ..sort((a, b) => a.start.compareTo(b.start));
+  final languages = extras?.languages.isNotEmpty == true ? extras!.languages : detectLanguages(text);
   final urls = entities.where((e) => e.type == EntityType.url).map((e) => e.value).toSet().take(3).toList();
   final kinds = <String>[
     if (urls.isNotEmpty) '${urls.length} link(s)',
     for (final t in [EntityType.phone, EntityType.bankAccount, EntityType.cryptoWallet, EntityType.amount])
       if (entities.any((e) => e.type == t)) '${entities.where((e) => e.type == t).length} ${_entityName(t)}',
   ];
-  done(route, kinds.isEmpty ? 'Message text, no links or payment details' : 'Found ${kinds.join(', ')}');
-  final artefact = Artefact(text: text, source: source, receivedAt: DateTime.now(), sender: sender, entities: entities);
+  done(route, '${kinds.isEmpty ? 'Message text, no links or payment details' : 'Found ${kinds.join(', ')}'}'
+      '${languages.isEmpty ? '' : '. Language: ${languages.join(', ')}'}');
+  final artefact = Artefact(
+      text: text,
+      source: source,
+      receivedAt: DateTime.now(),
+      sender: sender,
+      entities: entities,
+      kind: extras?.kind ?? 'text',
+      raw: extras?.raw,
+      languages: languages,
+      meta: extras?.meta ?? const {},
+      situation: extras?.situation);
 
   // 2. Text cues (on the device).
   final cueStep = step('Cue detector', 'Checking the wording for pressure tactics');
-  final findings = <Finding>[...detectCues(text)];
+  final findings = <Finding>[...detectCues(text), ...?extras?.findings];
   final risky = findings.where((f) => f.isRisk).map((f) => f.category).toSet();
   done(cueStep, risky.isEmpty ? 'No pressure tactics found' : 'Found: ${risky.map(cueLabel).join(', ')}');
 
@@ -226,7 +242,7 @@ Future<Investigation> investigate(
 
   // 5. Score.
   final scoreStep = step('Risk scorer', 'Combining all evidence');
-  final verdict = _verdict(findings, reports, ai, log, entities);
+  final verdict = _verdict(findings, reports, ai, log, entities, extras);
   done(scoreStep, '${verdict.score}/100, ${riskLabel(verdict.level)} (confidence ${verdict.confidence}%)');
 
   return Investigation(artefact: artefact, findings: findings, log: log, verdict: verdict, urls: reports, script: textForensics.script, attribution: attribution);
@@ -240,7 +256,8 @@ String _entityName(EntityType t) => switch (t) {
       _ => t.name,
     };
 
-Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai, List<LogStep> log, List<Entity> entities) {
+Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai, List<LogStep> log, List<Entity> entities,
+    [IntakeExtras? extras]) {
   // Each category counts once at full weight so a long message can't pile up
   // points by repeating the same word.
   final byCat = <CueCategory, int>{};
@@ -278,6 +295,7 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
   confidence = confidence.clamp(35, 95);
 
   String scamType = (ai?['scam_type'] as String?)?.trim() ??
+      extras?.scamType ??
       (level == RiskLevel.safe && legitimateHeadline(f) != null ? 'Legitimate message' : _guessType(byCat, urls));
   if (scamType.isEmpty) scamType = 'Unclear';
   final top = f.where((x) => x.isRisk).toList()..sort((a, b) => b.weight.compareTo(a.weight));
@@ -289,7 +307,9 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
           RiskLevel.caution => 'Mostly fine, but check this: ${top.isEmpty ? 'nothing major' : top.first.title.toLowerCase()}.',
           RiskLevel.safe => legitimateHeadline(f) ?? 'No warning signs found.',
         };
-  final next = (ai?['safe_next_step'] as String?)?.trim().isNotEmpty == true
+  final next = extras?.nextStep != null && level.index >= RiskLevel.suspicious.index
+      ? extras!.nextStep!
+      : (ai?['safe_next_step'] as String?)?.trim().isNotEmpty == true
       ? ai!['safe_next_step'] as String
       : _defaultNext(level, byCat, urls);
 
@@ -302,7 +322,7 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
     if (ai == null) 'No AI explanation (built-in checks only)',
     if (failed > 0) '$failed online check(s) could not run',
     if (urls.isEmpty && entities.isEmpty) 'Nothing to look up online',
-    'Voice, video and attachments are not analysed',
+    if (extras == null || !extras.isFile) 'Voice, video and attachments are not analysed',
   ];
   return Verdict(
     score: score,
@@ -329,6 +349,7 @@ String _guessType(Map<CueCategory, int> c, List<UrlReport> urls) {
   if (c.containsKey(CueCategory.romance) && (c.containsKey(CueCategory.investment) || c.containsKey(CueCategory.payment))) return 'Love and investment scam';
   if (c.containsKey(CueCategory.investment)) return 'Investment or job scam';
   if (c.containsKey(CueCategory.credentials)) return 'Account phishing';
+  if (c.containsKey(CueCategory.file)) return 'Dangerous file or app';
   if (c.containsKey(CueCategory.reward)) return 'Prize scam';
   if (c.isEmpty) return 'Legitimate message';
   return 'Suspicious message';
@@ -338,6 +359,7 @@ String _defaultNext(RiskLevel level, Map<CueCategory, int> c, List<UrlReport> ur
   if (level == RiskLevel.safe) return 'No action needed. If anything changes, check again.';
   final imit = urls.map((u) => u.imitates).whereType<String>().firstOrNull;
   if (imit != null) return "Don't open the link. Open the official $imit app or website yourself to check.";
+  if (c.containsKey(CueCategory.file)) return "Don't open or install this file. Delete it, and check with the sender on a number you already know.";
   if (c.containsKey(CueCategory.credentials)) return 'Never share your OTP, TAC or PIN. Call your bank using the number on your card.';
   if (c.containsKey(CueCategory.authority)) return 'Hang up. Real police and agencies never ask you to transfer money. Call the agency on its official number.';
   if (c.containsKey(CueCategory.payment) || c.containsKey(CueCategory.investment)) return "Don't send any money. Talk to someone you trust first.";

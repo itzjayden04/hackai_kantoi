@@ -6,6 +6,7 @@ import 'forensic_settings.dart';
 import 'guardian_ui.dart';
 import 'intel_page.dart' show IntelSettingsSection;
 import 'privacy_controls.dart';
+import 'intake_widgets.dart';
 import 'theme.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -132,10 +133,12 @@ class _SettingsPageState extends State<SettingsPage> {
       const SectionTitle('Family guardian'),
       const GuardianStatusTile(),
       const IntelSettingsSection(),
+      const IntakeSettingsSection(),
       const SectionTitle('Privacy'),
       Text(
         '• Message checks, redaction and relationship scoring run on your device.\n'
         '• Only links (to see where they go and how old the website is) and masked text for AI explanations go online.\n'
+        '• Files are read on your device. Only their fingerprint is checked online, unless you agree to send a recording to Gemini.\n'
         '• The activity log shows a cloud icon on every step that went online.\n'
         '• Nothing is reported anywhere until you approve it.\n'
         '• Old data is deleted automatically, and you can delete everything at any time below. '

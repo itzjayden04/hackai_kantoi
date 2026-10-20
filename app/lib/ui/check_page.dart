@@ -1,14 +1,19 @@
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../engine/investigator.dart';
 import '../engine/models.dart';
-import '../engine/vision.dart';
+import '../intake/intake_settings.dart';
+import '../intake/router.dart';
+import '../intake/share_intake.dart';
 import '../state.dart';
 import 'activity_log.dart';
+import 'emergency_page.dart';
+import 'intake_widgets.dart';
 import 'result_view.dart';
 import 'theme.dart';
 
@@ -20,32 +25,90 @@ class CheckPage extends StatefulWidget {
 
 class _CheckPageState extends State<CheckPage> {
   final _text = TextEditingController();
+  final _focus = FocusNode();
   List<LogStep> _steps = [];
   Investigation? _result;
   bool _busy = false;
   bool _dragging = false;
   String? _error;
+  String? _note;
+  String? _fileName;
 
-  Future<void> _run(String text, {Source source = Source.paste}) async {
-    if (text.trim().isEmpty || _busy) return;
+  @override
+  void initState() {
+    super.initState();
+    pendingShare.addListener(_takeShare);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _takeShare());
+  }
+
+  @override
+  void dispose() {
+    pendingShare.removeListener(_takeShare);
+    _focus.dispose();
+    super.dispose();
+  }
+
+  /// Starts a check straight away for anything shared from another app.
+  void _takeShare() {
+    final item = pendingShare.value;
+    if (item == null || !mounted || _busy) return;
+    pendingShare.value = null;
+    if (item.bytes != null) {
+      _check(bytes: item.bytes, name: item.name ?? 'shared file', mime: item.mime, source: Source.share);
+    } else {
+      _text.text = item.text!;
+      _check(text: item.text, source: Source.share);
+    }
+  }
+
+  /// Every input goes through the intake router, then the investigation.
+  Future<void> _check({String? text, Uint8List? bytes, String? name, String? mime, Source? source, IntakeKind? kind}) async {
+    if (_busy || (bytes == null && (text ?? '').trim().isEmpty)) return;
     setState(() {
       _busy = true;
       _error = null;
+      _note = null;
       _result = null;
       _steps = [];
+      _fileName = name;
     });
     try {
-      final r = await investigate(text.trim(), source: source, options: appState.options, onStep: (s) {
+      await intakeSettings.load();
+      final routed = await routeInput(
+        text: text?.trim(),
+        bytes: bytes,
+        name: name,
+        mime: mime,
+        forceKind: kind,
+        source: source,
+        llm: appState.llm,
+        situation: 'unsure',
+        askConsent: (what) => askMediaConsent(context, what),
+        virusTotalKey: intakeSettings.virusTotalKey,
+        onStep: (s) {
+          if (mounted) setState(() => _steps = s);
+        },
+      );
+      final r = await investigate(routed.text, source: routed.source, options: appState.options, extras: routed.extras, onStep: (s) {
         if (mounted) setState(() => _steps = s);
       });
       appState.addHistory(r);
-      if (mounted) setState(() => _result = r);
+      if (mounted) {
+        setState(() {
+          _result = r;
+          _note = routed.note;
+        });
+      }
+    } on IntakeError catch (e) {
+      if (mounted) setState(() => _error = e.message);
     } catch (e) {
       if (mounted) setState(() => _error = 'Something went wrong: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
+
+  Future<void> _run(String text) => _check(text: text);
 
   Future<void> _pasteAndCheck() async {
     final d = await Clipboard.getData(Clipboard.kTextPlain);
@@ -58,34 +121,35 @@ class _CheckPageState extends State<CheckPage> {
     await _run(t);
   }
 
-  Future<void> _image(Uint8List bytes, String name) async {
-    setState(() {
-      _busy = true;
-      _error = null;
-      _result = null;
-      _steps = [LogStep(tool: 'Screenshot reader', action: 'Reading the text in $name', sentOffDevice: appState.llm.leavesDevice)];
-    });
-    try {
-      final mime = name.toLowerCase().endsWith('.jpg') || name.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' : 'image/png';
-      final r = await readImage(bytes, appState.llm, mime: mime);
-      _text.text = r.combined;
-      setState(() => _busy = false);
-      await _run(r.combined, source: Source.screenshot);
-    } catch (e) {
-      setState(() {
-        _busy = false;
-        _error = '$e';
-      });
-    }
-  }
-
-  Future<void> _pickImage() async {
-    final f = await openFile(acceptedTypeGroups: const [
-      XTypeGroup(label: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'])
+  Future<void> _addFile() async {
+    // Android's picker filters by type itself; elsewhere list what Kantoi reads.
+    final android = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    final f = await openFile(acceptedTypeGroups: [
+      if (!android)
+        const XTypeGroup(label: 'Screenshots, documents, recordings, apps and chats', extensions: [
+          'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'pdf', 'docx', 'docm', 'apk', 'opus', 'ogg', 'mp3', 'm4a', 'aac', 'wav', 'flac',
+          'mp4', 'mov', '3gp', 'webm', 'txt', 'json', 'eml', 'zip',
+        ]),
     ]);
     if (f == null) return;
-    await _image(await f.readAsBytes(), f.name);
+    await _check(bytes: await f.readAsBytes(), name: f.name, mime: f.mimeType);
   }
+
+  Future<void> _scanQr() async {
+    final v = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const QrScanPage()));
+    if (v == null) return;
+    _text.text = v;
+    await _check(text: v, kind: IntakeKind.qr, source: Source.qr);
+  }
+
+  void _clear() => setState(() {
+        _text.clear();
+        _result = null;
+        _steps = [];
+        _error = null;
+        _note = null;
+        _fileName = null;
+      });
 
   @override
   Widget build(BuildContext context) {
@@ -98,14 +162,19 @@ class _CheckPageState extends State<CheckPage> {
         setState(() => _dragging = false);
         if (d.files.isEmpty) return;
         final f = d.files.first;
-        await _image(await f.readAsBytes(), f.name);
+        await _check(bytes: await f.readAsBytes(), name: f.name, mime: f.mimeType);
       },
       child: PageBody(children: [
         Text('Is this a scam?', style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
-        const SizedBox(height: 4),
-        Text('Paste a message, link or email, or drop a screenshot. Kantoi checks it and tells you what to do.',
-            style: t.bodyLarge?.copyWith(color: scheme.onSurfaceVariant)),
+        const SizedBox(height: 12),
+        TriageButtons(
+          onUnsure: () => _focus.requestFocus(),
+          onPaid: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => EmergencyPage(inv: _result))),
+        ),
         const SizedBox(height: 16),
+        Text('Paste a message, link or email, or add a screenshot, PDF, voice note or app file. Kantoi checks it and tells you what to do.',
+            style: t.bodyLarge?.copyWith(color: scheme.onSurfaceVariant)),
+        const SizedBox(height: 12),
         AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
@@ -114,9 +183,10 @@ class _CheckPageState extends State<CheckPage> {
           ),
           child: TextField(
             controller: _text,
+            focusNode: _focus,
             minLines: 4,
             maxLines: 10,
-            decoration: const InputDecoration(hintText: 'Paste the suspicious message or link here'),
+            decoration: InputDecoration(hintText: _dragging ? 'Drop the file to check it' : 'Paste the suspicious message, link or email here'),
             onSubmitted: _run,
           ),
         ),
@@ -130,19 +200,21 @@ class _CheckPageState extends State<CheckPage> {
             label: const Text('Check it'),
           ),
           OutlinedButton.icon(onPressed: _busy ? null : _pasteAndCheck, icon: const Icon(Icons.content_paste_rounded), label: const Text('Paste and check')),
-          OutlinedButton.icon(onPressed: _busy ? null : _pickImage, icon: const Icon(Icons.image_outlined), label: const Text('Screenshot')),
-          if (_text.text.isNotEmpty || _result != null)
-            TextButton(
-                onPressed: _busy
-                    ? null
-                    : () => setState(() {
-                          _text.clear();
-                          _result = null;
-                          _steps = [];
-                          _error = null;
-                        }),
-                child: const Text('Clear')),
+          OutlinedButton.icon(onPressed: _busy ? null : _addFile, icon: const Icon(Icons.attach_file_rounded), label: const Text('Add file')),
+          if (cameraQrAvailable)
+            OutlinedButton.icon(onPressed: _busy ? null : _scanQr, icon: const Icon(Icons.qr_code_scanner_rounded), label: const Text('Scan QR')),
+          if (_text.text.isNotEmpty || _result != null || _fileName != null)
+            TextButton(onPressed: _busy ? null : _clear, child: const Text('Clear')),
         ]),
+        if (_fileName != null) ...[
+          const SizedBox(height: 10),
+          Row(children: [
+            const Icon(Icons.insert_drive_file_outlined, size: 18),
+            const SizedBox(width: 6),
+            Expanded(child: Text(_fileName!, style: t.bodyMedium, overflow: TextOverflow.ellipsis)),
+            Text('Stays on your device', style: t.bodySmall?.copyWith(color: scheme.outline)),
+          ]),
+        ],
         if (_error != null) ...[
           const SizedBox(height: 12),
           Text(_error!, style: TextStyle(color: scheme.error)),
@@ -152,6 +224,10 @@ class _CheckPageState extends State<CheckPage> {
           ActivityLog(steps: _steps),
         ],
         if (_result != null) ...[
+          if (_note != null) ...[
+            const SizedBox(height: 16),
+            Text(_note!, style: t.bodyMedium?.copyWith(color: scheme.primary)),
+          ],
           const SizedBox(height: 20),
           ResultView(inv: _result!),
         ],

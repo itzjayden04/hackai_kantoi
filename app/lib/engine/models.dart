@@ -3,9 +3,9 @@ library;
 
 import 'attribution/intel_models.dart' show AttributionResult;
 
-enum Source { paste, whatsappWeb, telegramWeb, screenshot, qr, chatExport, questionnaire }
+enum Source { paste, whatsappWeb, telegramWeb, screenshot, qr, chatExport, questionnaire, document, voice, video, apk, email, share, telegramBot }
 
-enum EntityType { url, phone, bankAccount, email, cryptoWallet, amount, handle }
+enum EntityType { url, phone, bankAccount, email, cryptoWallet, amount, handle, ewallet, brand }
 
 class Entity {
   final EntityType type;
@@ -26,13 +26,57 @@ class Artefact {
   final DateTime receivedAt;
   final String? sender;
   final List<Entity> entities;
+
+  /// What kind of input this was (text, url, image, document, ...), the
+  /// languages found, the original content and the user's chosen situation.
+  final String kind;
+  final String? raw;
+  final List<String> languages;
+  final Map<String, String> meta;
+  final String? situation;
   const Artefact({
     required this.text,
     required this.source,
     required this.receivedAt,
     this.sender,
     this.entities = const [],
+    this.kind = 'text',
+    this.raw,
+    this.languages = const [],
+    this.meta = const {},
+    this.situation,
   });
+}
+
+/// What the intake router found before the text checks run: extra findings
+/// and log steps from file extractors, plus metadata for the artefact.
+class IntakeExtras {
+  final String kind;
+  final String? raw;
+  final List<String> languages;
+  final List<Finding> findings;
+  final List<LogStep> steps;
+  final List<Entity> entities;
+  final Map<String, String> meta;
+  final String? situation;
+
+  /// A safer next step than the generic one, e.g. for a dangerous app file.
+  final String? nextStep;
+  final String? scamType;
+  const IntakeExtras({
+    this.kind = 'text',
+    this.raw,
+    this.languages = const [],
+    this.findings = const [],
+    this.steps = const [],
+    this.entities = const [],
+    this.meta = const {},
+    this.situation,
+    this.nextStep,
+    this.scamType,
+  });
+
+  bool get isFile => !const {'text', 'url', 'email'}.contains(kind);
 }
 
 enum CueCategory {
@@ -52,6 +96,7 @@ enum CueCategory {
   aiManipulation,
   legitimacy,
   knownScam,
+  file,
 }
 
 String cueLabel(CueCategory c) => switch (c) {
@@ -71,6 +116,7 @@ String cueLabel(CueCategory c) => switch (c) {
       CueCategory.aiManipulation => 'Tries to trick AI checkers',
       CueCategory.legitimacy => 'Sign of legitimacy',
       CueCategory.knownScam => 'Known scam',
+      CueCategory.file => 'Risky file or app',
     };
 
 /// One piece of evidence. [weight] is positive for risk, negative for
@@ -199,6 +245,9 @@ class Investigation {
 
   Map<String, dynamic> toJson() => {
         'text': artefact.text,
+        'kind': artefact.kind,
+        'languages': artefact.languages,
+        if (artefact.meta.isNotEmpty) 'meta': artefact.meta,
         'verdict': verdict.toJson(),
         'findings': findings.map((f) => f.toJson()).toList(),
         'log': log.map((s) => s.toJson()).toList(),
