@@ -347,3 +347,8 @@ Future<UrlAnalysis> analyzeUrl(
     findings,
   );
 }
+
+/// Public access to the look-alike helpers for the threat-intel crawler.
+const Map<String, String> brandKeywords = _brandKeywords;
+String deconfuse(String s) => _deconfuse(s);
+String decodeHost(String host) => _decodeHost(host);

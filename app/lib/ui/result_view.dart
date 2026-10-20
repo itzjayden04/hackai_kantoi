@@ -6,6 +6,7 @@ import 'activity_log.dart';
 import 'emergency_page.dart';
 import 'report_page.dart';
 import 'theme.dart';
+import 'who_behind.dart';
 
 class ResultView extends StatelessWidget {
   final Investigation inv;
@@ -34,6 +35,7 @@ class ResultView extends StatelessWidget {
         const SectionTitle('Where the link really goes'),
         for (final u in inv.urls) _LinkChain(u),
       ],
+      if (inv.attribution != null) WhoBehindSection(result: inv.attribution!),
       SectionTitle('How Kantoi checked', trailing: Text('${inv.log.length} steps', style: Theme.of(context).textTheme.bodySmall)),
       ActivityLog(steps: inv.log),
       const SectionTitle('Honest limits'),
