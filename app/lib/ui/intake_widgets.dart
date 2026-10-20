@@ -151,7 +151,6 @@ class IntakeSettingsSection extends StatefulWidget {
 }
 
 class _IntakeSettingsSectionState extends State<IntakeSettingsSection> {
-  final _vt = TextEditingController();
   final _tg = TextEditingController();
 
   @override
@@ -159,14 +158,13 @@ class _IntakeSettingsSectionState extends State<IntakeSettingsSection> {
     super.initState();
     intakeSettings.load().then((_) {
       if (!mounted) return;
-      _vt.text = intakeSettings.virusTotalOverride;
       _tg.text = intakeSettings.telegramOverride;
       setState(() {});
     });
   }
 
   Future<void> _save() async {
-    await intakeSettings.save(virusTotal: _vt.text, telegram: _tg.text);
+    await intakeSettings.save(telegram: _tg.text);
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved.')));
   }
 
@@ -175,17 +173,8 @@ class _IntakeSettingsSectionState extends State<IntakeSettingsSection> {
     final t = Theme.of(context).textTheme;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SectionTitle('Files and recordings'),
-      Text('Files are read on your device. Only a fingerprint of each file (not the file) can be checked against VirusTotal\'s list of known harmful files.',
+      Text('Files are read on your device. With the VirusTotal key above, only a fingerprint of each file (never the file) is checked against its list of known harmful files.',
           style: t.bodyMedium),
-      const SizedBox(height: 10),
-      TextField(
-        controller: _vt,
-        obscureText: true,
-        decoration: InputDecoration(
-          labelText: 'VirusTotal key (optional)',
-          helperText: intakeSettings.hasBuiltInVirusTotal ? 'Leave empty to use the key built into this copy of Kantoi.' : 'Free at virustotal.com. Without it, this check is skipped.',
-        ),
-      ),
       const SizedBox(height: 6),
       ListenableBuilder(
         listenable: intakeSettings,
@@ -215,7 +204,7 @@ class _IntakeSettingsSectionState extends State<IntakeSettingsSection> {
         builder: (context, s, _) => Text('Telegram bot: ${s[0].toLowerCase()}${s.substring(1)}', style: t.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
       ),
       const SizedBox(height: 12),
-      Align(alignment: Alignment.centerLeft, child: OutlinedButton(onPressed: _save, child: const Text('Save file and bot settings'))),
+      Align(alignment: Alignment.centerLeft, child: OutlinedButton(onPressed: _save, child: const Text('Save bot settings'))),
     ]);
   }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../state.dart';
+
 /// Optional keys and remembered choices for the intake checks. Keys come from
 /// build-time defines and can be overridden in Settings; stored on the device.
 class IntakeSettings extends ChangeNotifier {
@@ -15,7 +17,8 @@ class IntakeSettings extends ChangeNotifier {
   bool? mediaConsent;
   bool _loaded = false;
 
-  String get virusTotalKey => _virusTotal.isNotEmpty ? _virusTotal : _buildVirusTotal;
+  /// The link-safety VirusTotal key in Settings wins, so there is one field.
+  String get virusTotalKey => appState.keys.virusTotal.isNotEmpty ? appState.keys.virusTotal : (_virusTotal.isNotEmpty ? _virusTotal : _buildVirusTotal);
   String get telegramToken => _telegram.isNotEmpty ? _telegram : _buildTelegram;
   String get virusTotalOverride => _virusTotal;
   String get telegramOverride => _telegram;

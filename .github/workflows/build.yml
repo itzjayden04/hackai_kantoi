@@ -48,7 +48,7 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build apk --release --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+      - run: flutter build apk --release --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} --dart-define=VIRUSTOTAL_API_KEY=${{ secrets.VIRUSTOTAL_API_KEY }} --dart-define=SAFE_BROWSING_API_KEY=${{ secrets.SAFE_BROWSING_API_KEY }} --dart-define=URLSCAN_API_KEY=${{ secrets.URLSCAN_API_KEY }} --dart-define=ABUSECH_AUTH_KEY=${{ secrets.ABUSECH_AUTH_KEY }} --dart-define=TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
       - run: cp build/app/outputs/flutter-apk/app-release.apk ../Kantoi-android.apk
       - uses: actions/upload-artifact@v4
         with:
@@ -69,7 +69,7 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build windows --release --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+      - run: flutter build windows --release --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} --dart-define=VIRUSTOTAL_API_KEY=${{ secrets.VIRUSTOTAL_API_KEY }} --dart-define=SAFE_BROWSING_API_KEY=${{ secrets.SAFE_BROWSING_API_KEY }} --dart-define=URLSCAN_API_KEY=${{ secrets.URLSCAN_API_KEY }} --dart-define=ABUSECH_AUTH_KEY=${{ secrets.ABUSECH_AUTH_KEY }} --dart-define=TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
       - name: Package
         shell: pwsh
         run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath ../Kantoi-windows.zip
