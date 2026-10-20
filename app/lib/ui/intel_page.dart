@@ -1,18 +1,23 @@
 import 'dart:async';
 
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
 
 import '../engine/attribution/graph.dart' show shortDate;
 import '../engine/attribution/intel_models.dart';
 import '../engine/attribution/intel_store.dart';
+import '../engine/forensics/tls_probe.dart';
+import '../engine/trace/trace_models.dart';
+import '../engine/trace/tracer.dart' show Tracer;
+import '../state.dart';
 import 'activity_log.dart';
 import 'intel_graph_view.dart';
+import 'kit.dart';
 import 'theme.dart';
+import 'trace/trace_canvas.dart';
+import 'trace/trace_widgets.dart';
 
-const semakMuleUrl = 'https://semakmule.rmp.gov.my';
 
 String _ago(DateTime d) {
   final days = DateTime.now().difference(d).inDays;
@@ -34,162 +39,271 @@ class DemoBadge extends StatelessWidget {
       );
 }
 
-/// The Scam map tab: "Before you pay" check, then this week's trends.
+
+/// The Trace tab: a live investigation that builds a map from real lookups,
+/// starting from a link, number, account, email or whole message.
 class IntelPage extends StatefulWidget {
-  const IntelPage({super.key});
+  /// For tests: the HTTP client each trace uses, whether to refresh the scam
+  /// map from the internet when the tab opens, and whether to read
+  /// certificates over a raw socket.
+  final http.Client Function()? client;
+  final bool autoCrawl;
+  final bool probeCertificates;
+  const IntelPage({super.key, this.client, this.autoCrawl = true, this.probeCertificates = true});
   @override
   State<IntelPage> createState() => _IntelPageState();
 }
 
 class _IntelPageState extends State<IntelPage> {
   final _q = TextEditingController();
-  QuickCheckResult? _check;
+  Tracer? _tracer;
+  http.Client? _http;
+  TraceState? _s;
+  StreamSubscription<TraceEvent>? _sub;
+  Timer? _clock;
+  int _v = 0;
+  String? _selected;
+  DateTime? _pausedAt;
+  Duration _pausedFor = Duration.zero;
   bool _showLog = false;
+
+  bool get _running => _s != null && !_s!.finished;
 
   @override
   void initState() {
     super.initState();
     intel.addListener(_changed);
+    appState.traceRequest.addListener(_onRequest);
     // Refresh in the background when the last crawl is a few hours old.
-    unawaited(intel.ensureLoaded().then((_) => intel.crawl()));
+    unawaited(intel.ensureLoaded().then((_) => widget.autoCrawl ? intel.crawl() : null));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onRequest());
   }
 
   void _changed() {
     if (mounted) setState(() {});
   }
 
+  void _onRequest() {
+    final r = appState.traceRequest.value;
+    if (r == null || !mounted) return;
+    appState.traceRequest.value = null;
+    if (r.trim().isEmpty) return;
+    _q.text = r;
+    _start();
+  }
+
   @override
   void dispose() {
     intel.removeListener(_changed);
+    appState.traceRequest.removeListener(_onRequest);
+    _stop();
     _q.dispose();
     super.dispose();
   }
 
-  void _run() {
-    if (_q.text.trim().isEmpty) return;
-    setState(() => _check = intel.quickCheck(_q.text));
+  void _stop() {
+    _tracer?.cancel();
+    _sub?.cancel();
+    _sub = null;
+    _clock?.cancel();
+    _http?.close();
+    _http = null;
   }
 
-  Future<void> _photo() async {
-    final f = await openFile(acceptedTypeGroups: const [
-      XTypeGroup(label: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'])
-    ]);
-    if (f == null) return;
-    final r = intel.checkPhoto(await f.readAsBytes());
-    if (mounted) setState(() => _check = r);
+  Future<void> _start() async {
+    final text = _q.text.trim();
+    if (text.isEmpty) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    _stop();
+    if (!intel.loaded) await intel.ensureLoaded();
+    if (!mounted) return;
+    final client = widget.client?.call() ?? http.Client();
+    final tracer = Tracer(
+      client: client,
+      graph: intel.graph,
+      keys: appState.keys,
+      tlsProbe: widget.probeCertificates && tlsProbeSupported ? (h) => probeTls(h) : null,
+      // A short beat between lookups so each step can be followed on the map.
+      pace: const Duration(milliseconds: 250),
+    );
+    final s = TraceState();
+    setState(() {
+      _http = client;
+      _tracer = tracer;
+      _s = s;
+      _selected = null;
+      _pausedAt = null;
+      _pausedFor = Duration.zero;
+      _v++;
+    });
+    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+    _sub = tracer.run(text).listen((e) {
+      if (!mounted || _s != s) return;
+      setState(() {
+        s.apply(e);
+        _v++;
+      });
+      if (e is TraceFinished) _finished(s);
+    });
   }
 
-  void _semakMule() {
-    final v = _q.text.trim();
-    if (v.isNotEmpty) Clipboard.setData(ClipboardData(text: v.replaceAll(RegExp(r'[\s-]'), '')));
-    launchUrl(Uri.parse(semakMuleUrl), mode: LaunchMode.externalApplication);
-    if (v.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Number copied. Paste it into Semak Mule.')));
-    }
+  void _finished(TraceState s) {
+    _clock?.cancel();
+    _http?.close();
+    _http = null;
+    if (s.cancelled || !mounted) return;
+    final risks = s.flags.where((f) => f.isRisk).length;
+    showKToast(
+      context,
+      title: 'Trace complete',
+      body: '${s.entityCount} items found, $risks warning sign${risks == 1 ? '' : 's'}. Tap to see the findings.',
+      icon: Icons.radar_rounded,
+      color: riskColor(s.level),
+      onTap: _openFindings,
+    );
+  }
+
+  void _togglePause() {
+    final t = _tracer;
+    if (t == null || !_running) return;
+    setState(() {
+      if (t.paused) {
+        t.resume();
+        if (_pausedAt != null) _pausedFor += DateTime.now().difference(_pausedAt!);
+        _pausedAt = null;
+      } else {
+        t.pause();
+        _pausedAt = DateTime.now();
+      }
+    });
+  }
+
+  Duration get _elapsed {
+    final s = _s;
+    if (s?.startedAt == null) return Duration.zero;
+    final end = s!.finishedAt ?? _pausedAt ?? DateTime.now();
+    final d = end.difference(s.startedAt!) - _pausedFor;
+    return d.isNegative ? Duration.zero : d;
+  }
+
+  void _openFindings() {
+    final s = _s;
+    if (s == null || !mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => TraceFindingsPage(state: s)));
+  }
+
+  void _inspect(String id) {
+    final s = _s;
+    if (s == null) return;
+    setState(() => _selected = id);
+    showTraceInspector(context, s, id).then((_) {
+      if (mounted) setState(() => _selected = null);
+    });
+  }
+
+  void _try(String v) {
+    _q.text = v;
+    _start();
+  }
+
+  Future<void> _paste() async {
+    final d = await Clipboard.getData(Clipboard.kTextPlain);
+    final v = d?.text?.trim();
+    if (v != null && v.isNotEmpty) setState(() => _q.text = v);
   }
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final scheme = Theme.of(context).colorScheme;
-    if (!intel.loaded) return const Center(child: CircularProgressIndicator());
-    final board = intel.trends();
-    final maxType = board.topTypes.isEmpty ? 1 : board.topTypes.first.$2;
+    final s = _s;
     return PageBody(children: [
-      Text('Scam map', style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
-      const SizedBox(height: 4),
-      Text('Which scams are going around in Malaysia, and which websites, numbers and accounts belong together. Kantoi never names people.',
-          style: t.bodyLarge?.copyWith(color: scheme.onSurfaceVariant)),
-      const SectionTitle('Before you pay'),
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text('Enter the account or phone number you were asked to pay. Kantoi checks it against scams it knows.', style: t.bodyMedium),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _q,
-              keyboardType: TextInputType.text,
-              textInputAction: TextInputAction.search,
-              decoration: InputDecoration(
-                hintText: 'e.g. 5123 4567 8901 or 012-345 6789',
-                suffixIcon: IconButton(tooltip: 'Check', icon: const Icon(Icons.search_rounded), onPressed: _run),
-              ),
-              onChanged: (_) => setState(() => _check = null),
-              onSubmitted: (_) => _run(),
+      if (s == null) ...[
+        Text('Trace', style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 4),
+        Text('Follow a scam link, number or account to see where it really leads. Kantoi looks it up live and draws the map as it goes.',
+            style: t.bodyLarge?.copyWith(color: K.onSurfaceVariant)),
+        const SizedBox(height: 16),
+      ],
+      _inputBar(),
+      if (s == null) ..._idle(context, t) else ..._trace(context, t, s),
+    ]);
+  }
+
+  Widget _inputBar() => KCard(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          TextField(
+            key: const ValueKey('trace-input'),
+            controller: _q,
+            minLines: 1,
+            maxLines: 4,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: 'Paste a link, number, account or message',
+              prefixIcon: const Icon(Icons.travel_explore_rounded),
+              suffixIcon: IconButton(tooltip: 'Paste', icon: const Icon(Icons.content_paste_rounded), onPressed: _paste),
             ),
-            const SizedBox(height: 10),
-            Wrap(spacing: 10, runSpacing: 10, children: [
-              FilledButton.icon(onPressed: _run, icon: const Icon(Icons.search_rounded), label: const Text('Check')),
-              OutlinedButton.icon(onPressed: _semakMule, icon: const Icon(Icons.open_in_new_rounded), label: const Text('Also check on Semak Mule (PDRM)')),
-              TextButton.icon(onPressed: _photo, icon: const Icon(Icons.face_outlined), label: const Text('Check a profile photo')),
-            ]),
-            if (_check != null) ...[const SizedBox(height: 12), _CheckResult(r: _check!)],
-          ]),
-        ),
-      ),
-      if (board.topTypes.isNotEmpty) ...[
-        const SectionTitle("This week's top scams"),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(children: [
-              for (final (type, n) in board.topTypes)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 5),
-                  child: Row(children: [
-                    SizedBox(width: 200, child: Text(type, maxLines: 2)),
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(value: n / maxType, minHeight: 10, backgroundColor: scheme.surfaceContainerHighest),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text('$n', style: t.labelLarge),
-                  ]),
-                ),
-              Align(alignment: Alignment.centerLeft, child: Text('Reports and news stories from the last 7 days.', style: t.bodySmall)),
-            ]),
+            onSubmitted: (_) => _start(),
           ),
-        ),
-      ],
-      if (board.campaigns.isNotEmpty) ...[
-        const SectionTitle('Active campaigns'),
-        for (final c in board.campaigns) _CampaignTile(c: c),
-      ],
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            onPressed: _start,
+            icon: const Icon(Icons.radar_rounded),
+            label: Text(_s == null ? 'Start trace' : 'Start new trace'),
+          ),
+        ]),
+      );
+
+  List<Widget> _idle(BuildContext context, TextTheme t) {
+    if (!intel.loaded) return const [Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator()))];
+    final board = intel.trends();
+    Widget how(IconData i, Color c, String text) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Row(children: [Icon(i, size: 18, color: c), const SizedBox(width: 10), Expanded(child: Text(text, style: t.bodyMedium))]),
+        );
+    return [
+      const SectionTitle('How a trace works'),
+      KCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          how(Icons.cloud_outlined, K.primaryContainer, 'Follows redirects and asks public records: domain registry, DNS, certificate logs and IP owners.'),
+          how(Icons.lock_outline_rounded, K.green, 'Checks look-alike names, number formats and the scam map saved on this phone.'),
+          how(Icons.hub_outlined, K.primary, 'Draws every server, nameserver, certificate and country it finds, live.'),
+          const SizedBox(height: 6),
+          Text('Passive lookups only: Kantoi never scans, logs in to or attacks anything.', style: t.bodySmall),
+        ]),
+      ),
+      const SectionTitle('Try it', trailing: DemoBadge()),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        ActionChip(avatar: const Icon(Icons.language_rounded, size: 18), label: const Text('A fake parcel site'), onPressed: () => _try('poslaju-my-redelivery.top')),
+        ActionChip(avatar: const Icon(Icons.phone_outlined, size: 18), label: const Text('A scam number'), onPressed: () => _try('+60 11-2004 7731')),
+      ]),
+      const SizedBox(height: 6),
+      Text('These examples come from the demo data bundled with Kantoi. The sites are made up, so the live lookups find little.', style: t.bodySmall),
       if (board.lookalikes.isNotEmpty) ...[
         const SectionTitle('Newest look-alike websites'),
-        Card(
+        KCard(
+          padding: EdgeInsets.zero,
           child: Column(children: [
             for (final d in board.lookalikes)
               ListTile(
                 leading: Icon(Icons.language_rounded, color: nodeColor(NodeType.domain)),
                 title: Text(d.key, style: const TextStyle(fontFamily: 'monospace')),
                 subtitle: Text('Pretends to be ${d.brand} · seen ${_ago(d.firstSeen)} · ${sourceLabel(d.source)}'),
-                trailing: d.synthetic ? const DemoBadge() : null,
+                trailing: d.synthetic ? const DemoBadge() : const Icon(Icons.radar_rounded),
+                onTap: () => _try(d.key),
               ),
           ]),
         ),
         const SizedBox(height: 6),
-        Text("Found in public certificate logs and scam feeds, often before anyone reports them. Don't open these addresses.", style: t.bodySmall),
+        Text("Found in public certificate logs and scam feeds. Tap one to trace it. Don't open these addresses.", style: t.bodySmall),
       ],
-      if (board.news.isNotEmpty) ...[
-        const SectionTitle('In the news'),
-        Card(
-          child: Column(children: [
-            for (final n in board.news)
-              ListTile(
-                leading: const Icon(Icons.newspaper_rounded),
-                title: Text(n.title),
-                subtitle: Text('${n.source} · ${_ago(n.at)} · ${n.scamType}'),
-                trailing: n.synthetic ? const DemoBadge() : const Icon(Icons.open_in_new_rounded, size: 18),
-                onTap: n.link.isEmpty ? null : () => launchUrl(Uri.parse(n.link), mode: LaunchMode.externalApplication),
-              ),
-          ]),
-        ),
+      if (board.campaigns.isNotEmpty) ...[
+        SectionTitle('Known campaigns', trailing: board.campaigns.every((c) => c.synthetic) ? const DemoBadge() : null),
+        for (final c in board.campaigns) _CampaignTile(c: c),
       ],
-      SectionTitle('Updates',
+      SectionTitle('Scam map updates',
           trailing: TextButton.icon(
             onPressed: intel.crawling ? null : () => intel.crawl(force: true),
             icon: intel.crawling
@@ -210,8 +324,8 @@ class _IntelPageState extends State<IntelPage> {
       ],
       const SizedBox(height: 10),
       Text(
-        'Kantoi only reads public data: certificate logs, public scam feeds, domain records and news. '
-        'It respects robots.txt, never logs in, never looks at social media profiles and never sends automated checks to government websites.',
+        'The scam map only reads public data: certificate logs, public scam feeds, domain records and news. '
+        'It respects robots.txt, never logs in and never sends automated checks to government websites.',
         style: t.bodySmall,
       ),
       if (intel.hasDemoData) ...[
@@ -219,51 +333,79 @@ class _IntelPageState extends State<IntelPage> {
         Text('Items marked "Demo data" are made-up examples so the map is not empty in the demo. They are not real reports.',
             style: t.bodySmall?.copyWith(color: const Color(0xFF92400E))),
       ],
-    ]);
+    ];
   }
-}
 
-class _CheckResult extends StatelessWidget {
-  final QuickCheckResult r;
-  const _CheckResult({required this.r});
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final c = r.found ? const Color(0xFFDC2626) : const Color(0xFF15803D);
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: c.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: c.withValues(alpha: 0.4))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(r.found ? Icons.gpp_bad_rounded : Icons.help_outline_rounded, color: c),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              r.found ? 'Stop. This ${r.kind} is linked to scams.' : 'This ${r.kind} is not in Kantoi\'s scam database.',
-              style: t.titleSmall?.copyWith(color: c, fontWeight: FontWeight.w800),
-            ),
-          ),
-          if (r.demo) const DemoBadge(),
-        ]),
-        const SizedBox(height: 6),
-        if (r.found) ...[
-          Text(
-            [
-              if (r.reports > 0) 'It appears in ${r.reports} scam report${r.reports == 1 ? '' : 's'}.',
-              if (r.campaign != null) 'It belongs to the campaign "${r.campaign!.label}".',
-              "Don't pay. If you already paid, call 997 now.",
-            ].join(' '),
-            style: t.bodyMedium,
-          ),
-          if (r.campaign != null)
-            TextButton(
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => CampaignPage(campaign: r.campaign!))),
-              child: const Text('See the campaign'),
-            ),
-        ] else
-          Text('That does not prove it is safe. New scam accounts appear every day, so also check it on Semak Mule.', style: t.bodyMedium),
+  List<Widget> _trace(BuildContext context, TextTheme t, TraceState s) {
+    final paused = _tracer?.paused ?? false;
+    final semak = s.nodes.values.where((n) => n.kind == TraceKind.phone || n.kind == TraceKind.account).toList();
+    return [
+      const SizedBox(height: 16),
+      TraceHud(state: s, elapsed: _elapsed, paused: paused),
+      const SizedBox(height: 12),
+      SizedBox(
+        height: 380,
+        child: TraceCanvas(state: s, version: _v, running: _running && !paused, selected: _selected, onTap: _inspect),
+      ),
+      const SizedBox(height: 10),
+      Row(children: [
+        Expanded(child: KProgressBar(value: s.progress, height: 6, color: s.finished ? K.green : K.primaryContainer)),
+        const SizedBox(width: 10),
+        Text(s.finished ? 'Done' : '${s.done} of ${s.total} lookups', style: traceMono.copyWith(fontSize: 11.5, color: K.onSurfaceVariant)),
       ]),
-    );
+      const SizedBox(height: 4),
+      Text('Tap a dot to inspect it. Pinch to zoom, drag to move.', style: t.bodySmall),
+      const SizedBox(height: 12),
+      TraceEntityCard(state: s),
+      const SizedBox(height: 12),
+      TraceAuditFeed(state: s, onShowAll: _openFindings),
+      if (semak.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        KCard(
+          color: K.surfaceLow,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              const Icon(Icons.local_police_outlined, color: K.primary),
+              const SizedBox(width: 12),
+              Expanded(child: Text('Also check ${semak.first.label} on the police Semak Mule site. Kantoi copies it for you.', style: t.bodyMedium)),
+            ]),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => openSemakMule(context, semak.first.kind == TraceKind.phone ? semak.first.label : semak.first.id.split(':').last),
+              icon: const Icon(Icons.open_in_new_rounded),
+              label: const Text('Check on Semak Mule'),
+            ),
+          ]),
+        ),
+      ],
+      const SizedBox(height: 16),
+      Row(children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _running ? _togglePause : _start,
+            icon: Icon(_running ? (paused ? Icons.play_arrow_rounded : Icons.pause_rounded) : Icons.replay_rounded),
+            label: Text(_running ? (paused ? 'Resume trace' : 'Pause trace') : 'Trace again'),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => exportTracePdf(context, s),
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            label: const Text('Police PDF'),
+          ),
+        ),
+      ]),
+      const SizedBox(height: 10),
+      FilledButton.icon(onPressed: _openFindings, icon: const Icon(Icons.fact_check_outlined), label: const Text('View full findings')),
+      const SizedBox(height: 12),
+      Text('Passive lookups only. Results show what public records say right now; scammers change servers often.', style: t.bodySmall),
+      if (s.hasDemo) ...[
+        const SizedBox(height: 6),
+        Text('Dots marked DEMO come from made-up demo data bundled with Kantoi, not from real reports.',
+            style: t.bodySmall?.copyWith(color: const Color(0xFF92400E))),
+      ],
+    ];
   }
 }
 
