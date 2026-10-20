@@ -1,58 +1,42 @@
 package my.kantoi.kantoi
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
+import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
-import android.graphics.PixelFormat
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
-import android.os.Build
-import android.os.CountDownTimer
-import android.provider.Settings
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
-import android.widget.Button
+import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
 
 /**
- * The pause card: a calm full-screen card drawn over the chat or payment app
- * when Kantoi sees a likely scam. If Android doesn't allow drawing over other
- * apps, a notification is shown instead.
+ * The pause card (Stitch "pause-card"): a calm full-screen card drawn over the
+ * chat or payment app when Kantoi sees a likely scam. "Continue" unlocks after
+ * a 5-second ring. If Kantoi can't draw over other apps, the warning
+ * notification (always posted) is all the user sees.
  */
 object PauseOverlay {
     private var shown: View? = null
-    private var timer: CountDownTimer? = null
-
-    private const val RED = "#DC2626"
-    private const val ORANGE = "#EA580C"
-    private const val BRAND = "#1E3A8A"
+    private var wm: WindowManager? = null
+    private var ring: ValueAnimator? = null
 
     /** Warning about a message or chat that looks like a scam. */
     fun showWarning(ctx: Context, r: Map<*, *>) {
-        val danger = r["level"] == "danger"
         val chat = r["chat"]?.toString().orEmpty()
-        val reasons = (r["reasons"] as? List<*>)?.map { it.toString() } ?: emptyList()
         val text = r["text"]?.toString().orEmpty()
         show(
             ctx,
-            accent = if (danger) RED else ORANGE,
-            badge = "Kantoi · ${r["label"] ?: "Suspicious"}",
-            title = if (chat.isNotBlank()) "Pause. This chat with $chat looks like a scam." else "Pause. This message looks like a scam.",
-            body = r["headline"]?.toString().orEmpty(),
-            reasons = reasons,
+            level = r["level"]?.toString() ?: "suspicious",
+            tag = r["scamType"]?.toString() ?: r["label"]?.toString() ?: "Suspicious",
+            title = "Pause. This looks like a scam.",
+            body = listOf(
+                if (chat.isNotBlank()) "From your chat with $chat." else "",
+                r["headline"]?.toString().orEmpty(),
+            ).filter { it.isNotBlank() }.joinToString(" "),
+            reasons = (r["reasons"] as? List<*>)?.map { it.toString() } ?: emptyList(),
             next = r["nextStep"]?.toString(),
-            primary = "See why" to { openKantoi(ctx, text) },
-            secondary = "I'll be careful",
-            waitSeconds = if (danger) 5 else 0,
+            primary = "Stop and check in Kantoi" to { openKantoi(ctx, text) },
         )
     }
 
@@ -60,19 +44,20 @@ object PauseOverlay {
     fun showPaymentPause(ctx: Context, appLabel: String) {
         val r = GuardEngine.lastAlert ?: return
         val chat = r["chat"]?.toString().orEmpty()
-        val reasons = (r["reasons"] as? List<*>)?.map { it.toString() } ?: emptyList()
+        if (!Overlays.canShow(ctx)) {
+            Notifier.warn(ctx, "Wait. Are you about to send money?", "You opened $appLabel soon after a risky chat. Talk to someone you trust first.", null)
+            return
+        }
         show(
             ctx,
-            accent = RED,
-            badge = "Kantoi · Before you pay",
+            level = "danger",
+            tag = "Before you pay",
             title = "Wait. Are you about to send money?",
             body = "You opened $appLabel soon after a chat${if (chat.isNotBlank()) " with $chat" else ""} that Kantoi flagged as " +
-                "${r["label"] ?: "suspicious"}. Scammers rush you so you don't stop to check.",
-            reasons = reasons,
+                "\"${r["label"] ?: "suspicious"}\". Scammers rush you so you don't stop to check.",
+            reasons = (r["reasons"] as? List<*>)?.map { it.toString() } ?: emptyList(),
             next = "Talk to someone you trust first. If you already paid, call your bank and the NSRC on 997 now.",
             primary = "Don't pay, go back" to { goHome(ctx) },
-            secondary = "Continue",
-            waitSeconds = 10,
         )
     }
 
@@ -82,6 +67,7 @@ object PauseOverlay {
         mapOf(
             "level" to "danger",
             "label" to "Very likely a scam",
+            "scamType" to "Investment scam (sample)",
             "chat" to "Amanda",
             "headline" to "This follows the pattern of an investment scam: a stranger, fast friendship, then a \"sure profit\" and a transfer.",
             "reasons" to listOf("Started with a \"wrong number\" message", "Unrealistic returns", "Money came up fast"),
@@ -92,147 +78,106 @@ object PauseOverlay {
 
     private fun show(
         ctx: Context,
-        accent: String,
-        badge: String,
+        level: String,
+        tag: String,
         title: String,
         body: String,
         reasons: List<String>,
         next: String?,
         primary: Pair<String, () -> Unit>,
-        secondary: String,
-        waitSeconds: Int,
     ) {
-        if (Build.VERSION.SDK_INT >= 23 && !Settings.canDrawOverlays(ctx)) {
-            notify(ctx, title, listOf(body, reasons.joinToString(", ")).filter { it.isNotBlank() }.joinToString("\n"))
-            return
-        }
-        dismiss(ctx)
+        if (!Overlays.canShow(ctx)) return
+        dismiss()
         val app = ctx.applicationContext
-        val wm = app.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        fun dp(v: Int) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), app.resources.displayMetrics).toInt()
-        fun label(s: String, size: Float, color: String, bold: Boolean = false) = TextView(app).apply {
-            text = s
-            textSize = size
-            setTextColor(Color.parseColor(color))
-            if (bold) typeface = Typeface.DEFAULT_BOLD
-            setLineSpacing(0f, 1.15f)
-        }
+        val ui = Ui(app)
+        val accent = if (level == "danger") KColor.red else KColor.orange
 
-        val card = LinearLayout(app).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(22), dp(20), dp(22), dp(18))
-            background = GradientDrawable().apply {
-                setColor(Color.WHITE)
-                cornerRadius = dp(22).toFloat()
-                setStroke(dp(3), Color.parseColor(accent))
-            }
+        val card = ui.column().apply {
+            setPadding(ui.dp(22), ui.dp(26), ui.dp(22), ui.dp(18))
+            background = android.graphics.drawable.LayerDrawable(
+                arrayOf<android.graphics.drawable.Drawable>(ui.round(accent, 24), ui.round(android.graphics.Color.WHITE, 24)),
+            ).apply { setLayerInset(1, 0, ui.dp(5), 0, 0) }
         }
-        card.addView(label(badge.uppercase(), 12f, accent, bold = true))
-        card.addView(label(title, 21f, "#0F172A", bold = true).apply { setPadding(0, dp(6), 0, dp(8)) })
-        if (body.isNotBlank()) card.addView(label(body, 15f, "#334155"))
-        if (reasons.isNotEmpty()) {
-            card.addView(label("Warning signs", 13f, "#64748B", bold = true).apply { setPadding(0, dp(12), 0, dp(2)) })
-            for (r in reasons.take(3)) card.addView(label("•  $r", 15f, "#0F172A"))
-        }
+        card.addView(ui.text(title, 26f, KColor.onSurface, 700, center = true))
+        if (body.isNotBlank()) card.addView(ui.text(body, 15f, KColor.onSurfaceVariant, center = true), ui.lp(top = 8))
+        for (r in reasons.take(3)) card.addView(ui.reason("!", r, null, accent, KColor.surfaceLow), ui.lp(top = 10))
         if (!next.isNullOrBlank()) {
-            card.addView(label(next, 15f, BRAND, bold = true).apply {
-                setPadding(dp(12), dp(10), dp(12), dp(10))
-                background = GradientDrawable().apply {
-                    setColor(Color.parseColor("#EEF2FF"))
-                    cornerRadius = dp(12).toFloat()
-                }
-            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14) })
+            card.addView(ui.row().apply {
+                setPadding(ui.dp(14), ui.dp(12), ui.dp(14), ui.dp(12))
+                background = ui.round(KColor.surfaceHigh, 14)
+                addView(ui.text("✓", 16f, KColor.primaryContainer, 700))
+                addView(ui.text(next, 15f, KColor.primaryContainer, 600), LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = ui.dp(10) })
+            }, ui.lp(top = 14))
         }
 
-        val first = Button(app).apply {
-            text = primary.first
-            isAllCaps = false
-            textSize = 16f
-            setTextColor(Color.WHITE)
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor(accent))
-                cornerRadius = dp(14).toFloat()
-            }
-        }
-        val second = Button(app).apply {
-            isAllCaps = false
-            textSize = 15f
-            setTextColor(Color.parseColor("#334155"))
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#F1F5F9"))
-                cornerRadius = dp(14).toFloat()
-            }
-        }
-        card.addView(first, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(18) })
-        card.addView(second, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(8) })
+        val stop = ui.button(primary.first, android.graphics.Color.WHITE, KColor.primaryContainer)
+        card.addView(stop, ui.lp(h = ui.dp(54), top = 18))
 
-        val root = FrameLayout(app).apply {
-            setBackgroundColor(Color.parseColor("#B30F172A"))
-            val scroll = ScrollView(app).apply {
-                isFillViewport = true
-                addView(FrameLayout(app).apply {
-                    setPadding(dp(18), dp(24), dp(18), dp(24))
-                    addView(card, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER))
-                })
-            }
-            addView(scroll, FrameLayout.LayoutParams(-1, -1))
+        // "Continue" with a ring that fills over 5 seconds before it unlocks.
+        val ringView = RingView(app, KColor.primaryContainer, KColor.outlineVariant)
+        val label = ui.text("Continue", 15f, KColor.onSurfaceVariant, 600)
+        val cont = ui.row().apply {
+            gravity = Gravity.CENTER
+            background = ui.round(KColor.surfaceLow, 100)
+            addView(ringView, LinearLayout.LayoutParams(ui.dp(20), ui.dp(20)))
+            addView(label, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = ui.dp(10) })
+            isEnabled = false
+            alpha = 0.7f
         }
+        card.addView(cont, ui.lp(h = ui.dp(50), top = 8))
+        card.addView(ui.text("Kantoi checked this on your phone. Nothing was sent or paid.", 13f, KColor.onSurfaceVariant, center = true), ui.lp(top = 12))
 
-        first.setOnClickListener {
-            dismiss(app)
+        // The hand badge and the scam-type pill sit above the card.
+        val top = ui.column().apply { gravity = Gravity.CENTER_HORIZONTAL }
+        top.addView(ui.text("✋", 30f, android.graphics.Color.WHITE, center = true).apply {
+            gravity = Gravity.CENTER
+            background = ui.round(accent, 100)
+            elevation = ui.dp(6).toFloat()
+        }, LinearLayout.LayoutParams(ui.dp(72), ui.dp(72)).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        top.addView(ui.pill(tag, KColor.onErrorContainer, KColor.errorContainer), LinearLayout.LayoutParams(-2, -2).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            topMargin = ui.dp(10)
+            bottomMargin = ui.dp(12)
+        })
+        val root: FrameLayout = Overlays.scrim(ui, card, top)
+
+        stop.setOnClickListener {
+            dismiss()
             primary.second()
         }
-        second.setOnClickListener { dismiss(app) }
+        cont.setOnClickListener { if (cont.isEnabled) dismiss() }
 
-        // A short, visible wait is the point of a pause card.
-        if (waitSeconds > 0) {
-            second.isEnabled = false
-            second.alpha = 0.6f
-            timer = object : CountDownTimer(waitSeconds * 1000L, 1000L) {
-                override fun onTick(left: Long) {
-                    second.text = "$secondary (${(left / 1000) + 1})"
+        val manager = Overlays.add(ctx, root, full = true) ?: return
+        shown = root
+        wm = manager
+        ring = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 5000
+            interpolator = LinearInterpolator()
+            addUpdateListener {
+                val v = it.animatedValue as Float
+                ringView.progress = v
+                label.text = if (v < 1f) "Continue in ${5 - (v * 5).toInt()}s" else "Continue"
+            }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    cont.isEnabled = true
+                    cont.alpha = 1f
+                    ringView.visibility = View.GONE
+                    label.text = "Continue"
+                    label.setTextColor(KColor.onSurface)
                 }
-
-                override fun onFinish() {
-                    second.text = secondary
-                    second.isEnabled = true
-                    second.alpha = 1f
-                }
-            }.start()
-        } else {
-            second.text = secondary
-        }
-
-        val type = if (Build.VERSION.SDK_INT >= 26) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
-        val lp = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            type,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT,
-        )
-        try {
-            wm.addView(root, lp)
-            shown = root
-        } catch (e: Exception) {
-            notify(ctx, title, body)
+            })
+            start()
         }
     }
 
-    fun dismiss(ctx: Context) {
-        timer?.cancel()
-        timer = null
-        val v = shown ?: return
+    fun dismiss() {
+        ring?.removeAllListeners()
+        ring?.cancel()
+        ring = null
+        Overlays.remove(wm, shown)
         shown = null
-        try {
-            (ctx.applicationContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager).removeView(v)
-        } catch (e: Exception) {
-        }
+        wm = null
     }
 
     /** Opens Kantoi and runs the full check of the message. */
@@ -246,38 +191,11 @@ object PauseOverlay {
         ctx.applicationContext.startActivity(i)
     }
 
-    private fun goHome(ctx: Context) {
+    fun goHome(ctx: Context) {
         val i = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_HOME)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         ctx.applicationContext.startActivity(i)
-    }
-
-    private fun notify(ctx: Context, title: String, body: String) {
-        val app = ctx.applicationContext
-        val nm = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= 26) {
-            nm.createNotificationChannel(NotificationChannel("kantoi_alerts", "Scam warnings", NotificationManager.IMPORTANCE_HIGH))
-        }
-        val open = PendingIntent.getActivity(
-            app, 0, Intent(app, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(app, "kantoi_alerts") else {
-            @Suppress("DEPRECATION")
-            Notification.Builder(app)
-        }
-        val n = b.setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(title)
-            .setContentText(body)
-            .setStyle(Notification.BigTextStyle().bigText(body))
-            .setContentIntent(open)
-            .setAutoCancel(true)
-            .build()
-        try {
-            nm.notify(4721, n)
-        } catch (e: SecurityException) {
-        }
     }
 }

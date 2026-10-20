@@ -6,6 +6,17 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Setup asks once so the phone doesn't stop protection to save battery. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <!-- "Kantoi is protecting this phone": the background service, restarted after a reboot. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- New apps guard: sees newly installed apps and the access they ask for. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
+    <!-- Pictures & QR guard: new screenshots and photos, checked on the phone. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+    <!-- Call guard: lets "Decline call" on the call warning end a ringing call. -->
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <application
         android:label="Kantoi"
@@ -77,6 +88,33 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/kantoi_accessibility"/>
         </service>
+        <!-- Call guard: Android passes the incoming number (only the number). -->
+        <service
+            android:name=".KantoiCallScreeningService"
+            android:label="@string/kantoi_call_label"
+            android:exported="true"
+            android:permission="android.permission.BIND_SCREENING_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.CallScreeningService"/>
+            </intent-filter>
+        </service>
+        <!-- Keeps protection running and watches for new apps and pictures. -->
+        <service
+            android:name=".GuardService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Scam protection: watches for newly installed apps and new screenshots or photos with QR codes, and warns the user about scams in real time."/>
+        </service>
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+            </intent-filter>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

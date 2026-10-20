@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="kantoi_accessibility_description">Kantoi checks the messages in the WhatsApp or Telegram chat you have open for scam signs, and shows a pause card if you open a banking or e-wallet app right after a risky chat. Messages are checked on this phone and never sent anywhere. Other apps\' screens are not read.</string>
+    <string name="kantoi_accessibility_description">Kantoi checks the WhatsApp, Telegram or Messenger chat you have open for scam signs and shows a small risk badge on it. It reads the address bar of your web browser and closes known or look-alike scam websites. It also shows a pause card if you open a banking or e-wallet app right after a risky chat. Everything is checked on this phone. Other apps\' screens are not read.</string>
     <string name="kantoi_guard_label">Kantoi scam protection</string>
+    <string name="kantoi_call_label">Kantoi caller check</string>
 </resources>
