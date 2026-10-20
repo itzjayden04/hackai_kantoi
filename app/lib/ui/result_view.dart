@@ -4,6 +4,7 @@ import '../engine/models.dart';
 import 'activity_log.dart';
 import 'emergency_page.dart';
 import 'explainer_card.dart';
+import 'forensics_widgets.dart';
 import 'guardian_ui.dart';
 import 'report_page.dart';
 import 'theme.dart';
@@ -32,6 +33,10 @@ class ResultView extends StatelessWidget {
         const SizedBox(height: 12),
         for (final f in topRisks.take(6)) _CueTile(f),
         for (final f in legit.take(3)) _CueTile(f),
+      ],
+      if (inv.script != null) ...[
+        const SectionTitle('Where this is in the scam script'),
+        ScriptStepper(inv.script!),
       ],
       if (inv.urls.isNotEmpty) ...[
         const SectionTitle('Where the link really goes'),
@@ -239,6 +244,7 @@ class _LinkChain extends StatelessWidget {
               Expanded(child: Text(u.hops[i].url, style: t.bodyMedium?.copyWith(fontFamily: 'monospace'), maxLines: 2, overflow: TextOverflow.ellipsis)),
               if (u.hops[i].status != null) Text('${u.hops[i].status}', style: t.labelSmall),
             ]),
+            HopFacts(u.hops[i]),
             if (i < u.hops.length - 1) const SizedBox(height: 6),
           ],
           const Divider(height: 20),
@@ -249,6 +255,7 @@ class _LinkChain extends StatelessWidget {
               _chip(context, 'Registered ${u.domainAgeDays} days ago', u.domainAgeDays! < 30 ? const Color(0xFFDC2626) : null),
             if (u.registrar != null) _chip(context, 'Registrar: ${u.registrar}', null),
           ]),
+          LinkForensicsPanel(u),
         ]),
       ),
     );

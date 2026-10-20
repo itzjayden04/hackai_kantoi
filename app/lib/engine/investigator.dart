@@ -1,7 +1,13 @@
 import 'dart:async';
 
+import 'package:http/http.dart' as http;
+
 import 'cues.dart';
 import 'entities.dart';
+import 'forensics/allowlist.dart';
+import 'forensics/keys.dart';
+import 'forensics/link_forensics.dart';
+import 'forensics/text_forensics.dart';
 import 'llm.dart';
 import 'models.dart';
 import 'redaction.dart';
@@ -29,7 +35,21 @@ class InvestigateOptions {
   final LlmConfig llm;
   final bool network;
   final Set<String> ownDetails;
-  const InvestigateOptions({this.llm = LlmConfig.defaults, this.network = true, this.ownDetails = const {}});
+  /// Optional reputation-service keys for the deep link checks.
+  final ForensicKeys keys;
+  /// Skips the slow link checks (remote browser, screenshot, cloaking) for
+  /// instant live scoring.
+  final bool quick;
+  /// For tests: the HTTP client every online link check uses.
+  final http.Client? httpClient;
+  const InvestigateOptions({
+    this.llm = LlmConfig.defaults,
+    this.network = true,
+    this.ownDetails = const {},
+    this.keys = ForensicKeys.defaults,
+    this.quick = false,
+    this.httpClient,
+  });
 }
 
 /// Runs the full investigation and reports each step through [onStep] as it
@@ -74,15 +94,40 @@ Future<Investigation> investigate(
   final risky = findings.where((f) => f.isRisk).map((f) => f.category).toSet();
   done(cueStep, risky.isEmpty ? 'No pressure tactics found' : 'Found: ${risky.map(cueLabel).join(', ')}');
 
+  // 2b. Text forensics (on the device): disguised spelling, mixed languages,
+  // scam-script stage.
+  final textForensics = analyzeText(text, existing: findings, log: (tool, action, {sentOffDevice = false}) {
+    return step(tool, action, sentOffDevice: sentOffDevice);
+  });
+  findings.addAll(textForensics.findings);
+  onStep?.call(List.of(log));
+
   // 3. Links.
   final reports = <UrlReport>[];
+  final linkClient = options.httpClient ?? http.Client();
   for (final u in urls) {
-    final a = await analyzeUrl(u, network: options.network, log: (tool, action, {sentOffDevice = false}) {
+    final a = await analyzeUrl(u, network: options.network, client: options.httpClient, log: (tool, action, {sentOffDevice = false}) {
       return step(tool, action, sentOffDevice: sentOffDevice);
     });
+    // Deep link forensics: hosting, certificates, reputation, landing page.
+    var report = a.report;
+    final linkFindings = [...a.findings];
+    if (options.network) {
+      final deep = await deepLinkCheck(a.report,
+          log: (tool, action, {sentOffDevice = false}) => step(tool, action, sentOffDevice: sentOffDevice),
+          client: linkClient,
+          keys: options.keys,
+          llm: options.llm,
+          quick: options.quick,
+          // An injected client (tests) cannot stand in for the raw TLS socket.
+          probeCertificates: options.httpClient == null,
+          onChange: () => onStep?.call(List.of(log)));
+      report = deep.report;
+      linkFindings.addAll(deep.findings);
+    }
     // Point link findings at the link's position in the text.
     final pos = text.indexOf(u);
-    findings.addAll(a.findings.map((f) => pos < 0
+    findings.addAll(linkFindings.map((f) => pos < 0
         ? f
         : Finding(
             category: f.category,
@@ -92,9 +137,16 @@ Future<Investigation> investigate(
             tool: f.tool,
             start: pos,
             end: pos + u.length)));
-    reports.add(a.report);
+    reports.add(report);
     onStep?.call(List.of(log));
   }
+  if (options.httpClient == null) linkClient.close();
+
+  // 3b. Legitimacy: official sender and known-good templates (on the device).
+  final legitStep = step('Legitimacy check', 'Comparing with official senders and genuine message templates');
+  final legitFindings = legitimacyFindings(text, sender: sender, urls: reports, prior: findings);
+  findings.addAll(legitFindings);
+  done(legitStep, legitFindings.isEmpty ? 'No official sender or genuine template matched' : 'Matched: ${legitFindings.map((f) => f.title).join(', ')}');
 
   // 4. AI analyst, on a redacted copy.
   Map<String, dynamic>? ai;
@@ -165,7 +217,7 @@ Future<Investigation> investigate(
   final verdict = _verdict(findings, reports, ai, log, entities);
   done(scoreStep, '${verdict.score}/100, ${riskLabel(verdict.level)} (confidence ${verdict.confidence}%)');
 
-  return Investigation(artefact: artefact, findings: findings, log: log, verdict: verdict, urls: reports);
+  return Investigation(artefact: artefact, findings: findings, log: log, verdict: verdict, urls: reports, script: textForensics.script);
 }
 
 String _entityName(EntityType t) => switch (t) {
@@ -211,7 +263,8 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
   if (score > 85 || score < 8) confidence += 8;
   confidence = confidence.clamp(35, 95);
 
-  String scamType = (ai?['scam_type'] as String?)?.trim() ?? _guessType(byCat, urls);
+  String scamType = (ai?['scam_type'] as String?)?.trim() ??
+      (level == RiskLevel.safe && legitimateHeadline(f) != null ? 'Legitimate message' : _guessType(byCat, urls));
   if (scamType.isEmpty) scamType = 'Unclear';
   final top = f.where((x) => x.isRisk).toList()..sort((a, b) => b.weight.compareTo(a.weight));
   final headline = (ai?['summary'] as String?)?.trim().isNotEmpty == true
@@ -220,7 +273,7 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
           RiskLevel.danger => 'This looks like a $scamType. ${_sentence(top.map((x) => x.title).toSet().take(2).toList())}.',
           RiskLevel.suspicious => 'This has several warning signs: ${top.take(3).map((x) => x.title.toLowerCase()).join(', ')}.',
           RiskLevel.caution => 'Mostly fine, but check this: ${top.isEmpty ? 'nothing major' : top.first.title.toLowerCase()}.',
-          RiskLevel.safe => 'No warning signs found.',
+          RiskLevel.safe => legitimateHeadline(f) ?? 'No warning signs found.',
         };
   final next = (ai?['safe_next_step'] as String?)?.trim().isNotEmpty == true
       ? ai!['safe_next_step'] as String

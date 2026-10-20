@@ -78,7 +78,7 @@ Future<Map<String, dynamic>> _check(Map<String, dynamic> b) async {
   final inv = await investigate(text,
       source: _source(b),
       sender: sender,
-      options: InvestigateOptions(llm: const LlmConfig(kind: LlmKind.none), ownDetails: appState.ownDetails));
+      options: InvestigateOptions(llm: const LlmConfig(kind: LlmKind.none), ownDetails: appState.ownDetails, keys: appState.keys, quick: true));
   final list = _chats.putIfAbsent(chat, () => []);
   if (!list.any((m) => m.text == text && m.sender == sender)) {
     list.add(ChatMessage(time: DateTime.now(), sender: sender, text: text, fromMe: b['fromMe'] == true));

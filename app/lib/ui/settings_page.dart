@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../engine/llm.dart';
 import '../state.dart';
+import 'forensic_settings.dart';
 import 'guardian_ui.dart';
 import 'theme.dart';
 
@@ -17,6 +18,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late final _model = TextEditingController(text: appState.llm.model);
   late final _base = TextEditingController(text: appState.llm.baseUrl);
   late final _own = TextEditingController(text: appState.ownDetails.join(', '));
+  late final _keys = ForensicKeysController(appState.keys);
   String? _test;
   bool _testing = false;
 
@@ -28,6 +30,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _save() async {
     await appState.saveLlm(_config);
     await appState.saveOwnDetails(_own.text.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toSet());
+    await appState.saveKeys(_keys.value);
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved.')));
   }
 
@@ -121,6 +124,7 @@ class _SettingsPageState extends State<SettingsPage> {
           style: t.bodyMedium),
       const SizedBox(height: 10),
       TextField(controller: _own, decoration: const InputDecoration(hintText: 'e.g. Tan Mei Ling, 012-345 6789')),
+      ForensicKeysSection(controller: _keys),
       const SizedBox(height: 20),
       FilledButton(onPressed: _save, child: const Text('Save settings')),
       const SectionTitle('Family guardian'),

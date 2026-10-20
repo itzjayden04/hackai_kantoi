@@ -180,12 +180,15 @@ class Investigation {
   final List<LogStep> log;
   final Verdict verdict;
   final List<UrlReport> urls;
+  /// Which known scam script the message follows, and how far along it is.
+  final ScriptProgress? script;
   const Investigation({
     required this.artefact,
     required this.findings,
     required this.log,
     required this.verdict,
     required this.urls,
+    this.script,
   });
 
   Map<String, dynamic> toJson() => {
@@ -195,14 +198,50 @@ class Investigation {
         'log': log.map((s) => s.toJson()).toList(),
         'entities': artefact.entities.map((e) => e.toJson()).toList(),
         'urls': urls.map((u) => u.toJson()).toList(),
+        if (script != null) 'script': script!.toJson(),
       };
+}
+
+/// Where a message sits in a known scam script, e.g. step 3 of 5 of a job
+/// task scam.
+class ScriptProgress {
+  final String script;
+  final List<String> stages;
+  /// Zero-based index of the furthest stage the message reached.
+  final int stage;
+  final Set<int> matched;
+  const ScriptProgress({required this.script, required this.stages, required this.stage, this.matched = const {}});
+  Map<String, dynamic> toJson() =>
+      {'script': script, 'stages': stages, 'stage': stage, 'matched': matched.toList()..sort()};
 }
 
 class UrlHop {
   final String url;
   final int? status;
-  const UrlHop(this.url, this.status);
-  Map<String, dynamic> toJson() => {'url': url, 'status': status};
+  // Per-hop facts from the forensic link checks (all optional).
+  final String? ip;
+  final String? network;
+  final String? country;
+  final String? tlsIssuer;
+  final String? tlsSubject;
+  final DateTime? tlsValidFrom;
+  final bool? tlsTrusted;
+  /// How this hop was reached when it was not an HTTP redirect, e.g. "page refresh tag".
+  final String? via;
+  const UrlHop(this.url, this.status,
+      {this.ip, this.network, this.country, this.tlsIssuer, this.tlsSubject, this.tlsValidFrom, this.tlsTrusted, this.via});
+  Map<String, dynamic> toJson() => {
+        'url': url,
+        'status': status,
+        if (ip != null) 'ip': ip,
+        if (network != null) 'network': network,
+        if (country != null) 'country': country,
+        if (tlsIssuer != null) 'tlsIssuer': tlsIssuer,
+        if (tlsSubject != null) 'tlsSubject': tlsSubject,
+        if (tlsValidFrom != null) 'tlsValidFrom': tlsValidFrom!.toIso8601String(),
+        if (tlsTrusted != null) 'tlsTrusted': tlsTrusted,
+        if (via != null) 'via': via,
+      };
 }
 
 class UrlReport {
@@ -214,6 +253,13 @@ class UrlReport {
   final String? registrar;
   final bool official;
   final String? imitates;
+  // Results of the deeper forensic link checks (all optional).
+  final String? pageTitle;
+  final String? screenshotUrl;
+  final String? remoteVerdict;
+  final String? remoteFinalUrl;
+  final List<String> reputationHits;
+  final bool? cloaked;
   const UrlReport({
     required this.input,
     required this.finalUrl,
@@ -223,6 +269,12 @@ class UrlReport {
     this.registrar,
     this.official = false,
     this.imitates,
+    this.pageTitle,
+    this.screenshotUrl,
+    this.remoteVerdict,
+    this.remoteFinalUrl,
+    this.reputationHits = const [],
+    this.cloaked,
   });
 
   Map<String, dynamic> toJson() => {
@@ -234,5 +286,11 @@ class UrlReport {
         'registrar': registrar,
         'official': official,
         'imitates': imitates,
+        if (pageTitle != null) 'pageTitle': pageTitle,
+        if (screenshotUrl != null) 'screenshotUrl': screenshotUrl,
+        if (remoteVerdict != null) 'remoteVerdict': remoteVerdict,
+        if (remoteFinalUrl != null) 'remoteFinalUrl': remoteFinalUrl,
+        if (reputationHits.isNotEmpty) 'reputationHits': reputationHits,
+        if (cloaked != null) 'cloaked': cloaked,
       };
 }
