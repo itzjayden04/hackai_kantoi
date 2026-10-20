@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../engine/models.dart';
 import 'activity_log.dart';
 import 'emergency_page.dart';
+import 'feedback_bar.dart';
+import 'limits_page.dart';
 import 'report_page.dart';
 import 'theme.dart';
 
@@ -38,6 +40,15 @@ class ResultView extends StatelessWidget {
       ActivityLog(steps: inv.log),
       const SectionTitle('Honest limits'),
       _Limits(v),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LimitsPage())),
+          child: const Text("What Kantoi can't do"),
+        ),
+      ),
+      const SizedBox(height: 4),
+      FeedbackBar(key: ObjectKey(inv), inv: inv),
     ]);
   }
 }
