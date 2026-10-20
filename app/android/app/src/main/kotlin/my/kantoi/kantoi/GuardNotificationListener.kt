@@ -7,17 +7,19 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 
 /**
- * Reads new message notifications from chat apps (WhatsApp, Telegram, SMS) and
- * hands each new message to Kantoi's checks. Notifications from other apps are
- * ignored, and nothing is stored unless a message is flagged.
+ * Reads new message notifications from chat apps (WhatsApp, Telegram, SMS)
+ * and email apps (Gmail, Outlook) and hands each new message to Kantoi's
+ * checks. Notifications from other apps are ignored, and nothing is stored
+ * unless a message is flagged.
  */
 class GuardNotificationListener : NotificationListenerService() {
     private val seen = LinkedHashSet<String>()
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        if (!GuardEngine.isEnabled(this)) return
+        if (!GuardEngine.guardOn(this, "messages")) return
         val pkg = sbn.packageName ?: return
-        if (pkg !in GuardEngine.chatApps) return
+        val email = pkg in GuardEngine.emailApps
+        if (pkg !in GuardEngine.chatApps && !email) return
         val n = sbn.notification ?: return
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
         val extras = n.extras ?: return
@@ -26,8 +28,13 @@ class GuardNotificationListener : NotificationListenerService() {
         val conversation = extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE)?.toString()
         val chat = conversation ?: title
 
-        val messages = readMessages(extras)
-        if (messages.isEmpty()) {
+        val messages: MutableList<Pair<String, String>> = if (email) mutableListOf() else readMessages(extras)
+        if (email) {
+            // Title is the sender; the big text holds subject and preview.
+            val body = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
+                ?: extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: return
+            messages.add(title to body)
+        } else if (messages.isEmpty()) {
             val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: return
             messages.add(title to text)
         }
