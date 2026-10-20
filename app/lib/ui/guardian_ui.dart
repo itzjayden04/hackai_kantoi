@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../awareness/guardian.dart';
 import '../engine/models.dart';
+import 'kit.dart';
 import 'theme.dart';
 
 /// Opens WhatsApp or SMS with a short pre-filled alert to the guardian. The
@@ -46,10 +47,13 @@ class _GuardianAlertButtonState extends State<GuardianAlertButton> {
         builder: (context, _) {
           final g = guardianStore.ready;
           if (g == null) return const SizedBox.shrink();
-          return FilledButton.tonalIcon(
-            icon: const Icon(Icons.family_restroom_rounded),
-            label: Text('Tell ${g.name.trim()}'),
-            onPressed: () => tellGuardian(context, inv: widget.inv, emergency: widget.emergency),
+          return Padding(
+            padding: EdgeInsets.only(bottom: widget.emergency ? 12 : 0),
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.family_restroom_outlined),
+              label: Text('Tell ${g.name.trim()} what happened'),
+              onPressed: () => tellGuardian(context, inv: widget.inv, emergency: widget.emergency),
+            ),
           );
         },
       );
@@ -113,7 +117,7 @@ class _GuardianPageState extends State<GuardianPage> {
       appBar: AppBar(title: const Text('Family guardian')),
       body: PageBody(children: [
         Text('Pick someone you trust, like a son, daughter or close friend. When Kantoi finds something very likely to be a scam, '
-            'or you open "I already paid", you can tell them in one tap.', style: t.bodyLarge?.copyWith(height: 1.4)),
+            'or you open Emergency, you can tell them in one tap.', style: t.bodyMedium?.copyWith(height: 1.4)),
         const SizedBox(height: 16),
         TextField(
           controller: _name,
@@ -151,9 +155,14 @@ class _GuardianPageState extends State<GuardianPage> {
               'The alert never includes the message itself or your personal details.'),
         ),
         const SectionTitle('What they will see'),
-        Card(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: Padding(padding: const EdgeInsets.all(14), child: Text(preview, style: t.bodyMedium?.copyWith(height: 1.4))),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: const BoxDecoration(
+            color: K.surfaceLow,
+            borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(16), topRight: Radius.circular(16), bottomRight: Radius.circular(16), bottomLeft: Radius.circular(4)),
+          ),
+          child: Text(preview, style: t.bodyMedium?.copyWith(height: 1.4, color: K.onSurface)),
         ),
         const SizedBox(height: 20),
         FilledButton(onPressed: canSave ? _save : null, child: const Text('Save guardian')),
@@ -192,22 +201,34 @@ class _GuardianStatusTileState extends State<GuardianStatusTile> {
         builder: (context, _) {
           final g = guardianStore.guardian;
           final ready = guardianStore.ready != null;
-          return Card(
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              leading: Icon(Icons.family_restroom_rounded,
-                  color: ready ? const Color(0xFF15803D) : Theme.of(context).colorScheme.outline),
-              title: Text(ready
-                  ? 'Guardian: ${g!.name}'
-                  : g == null
-                      ? 'Add a family guardian'
-                      : 'Guardian needs your consent'),
-              subtitle: Text(ready
-                  ? 'You can tell ${g!.name} in one tap if something looks dangerous.'
-                  : 'Someone you trust, told in one tap when a message is very likely a scam.'),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GuardianPage())),
-            ),
+          return KCard(
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GuardianPage())),
+            child: Row(children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: (ready ? K.green : K.primary).withValues(alpha: 0.1), shape: BoxShape.circle),
+                child: Icon(Icons.family_restroom_outlined, color: ready ? K.green : K.primary),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(
+                      ready
+                          ? 'Guardian: ${g!.name}'
+                          : g == null
+                              ? 'Add a family guardian'
+                              : 'Guardian needs your consent',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(
+                      ready
+                          ? 'You can tell ${g!.name} in one tap if something looks dangerous.'
+                          : 'Someone you trust, told in one tap when a message is very likely a scam.',
+                      style: Theme.of(context).textTheme.bodySmall),
+                ]),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: K.outline),
+            ]),
           );
         },
       );

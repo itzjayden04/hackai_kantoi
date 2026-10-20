@@ -120,7 +120,25 @@ class ReportDetails {
   String paidFromBank = '';
   String contactMethod = '';
   String scammerBank = '';
+
+  /// The scammer's number, profile or link, typed in when no message was
+  /// checked first.
+  String scammerContact = '';
+
+  /// What happened, in the user's own words.
+  String story = '';
 }
+
+/// The four places a victim reports to, as chips on the report page.
+const authorities = [police, nsrc, bank, mcmc];
+
+String authorityLabel(Channel c) => switch (c.id) {
+      'police' => 'Police',
+      'nsrc' => 'NSRC 997',
+      'bank' => 'Bank',
+      'mcmc' => 'MCMC',
+      _ => c.name,
+    };
 
 /// One field of a report form, with a copy button in the UI.
 class PackField {
@@ -138,12 +156,12 @@ const _situationSentence = {
 
 /// A short description in plain sentences, for the "description" box of any
 /// report form. [scamText] is already redacted.
-String incidentDescription(Investigation inv, ReportDetails d, Situation s) {
-  final v = inv.verdict;
+String incidentDescription(Investigation? inv, ReportDetails d, Situation s) {
   final how = d.contactMethod.isEmpty ? '' : ' on ${d.contactMethod}';
-  final signs = inv.findings.where((f) => f.isRisk).map((f) => f.title.toLowerCase()).toSet().take(3).toList();
+  final signs = (inv?.findings ?? const <Finding>[]).where((f) => f.isRisk).map((f) => f.title.toLowerCase()).toSet().take(3).toList();
+  final what = inv == null ? 'a scam' : 'what looks like a ${inv.verdict.scamType.toLowerCase()}';
   final b = StringBuffer('${d.when.isEmpty ? 'Recently' : 'On ${d.when}'}, I was contacted$how by someone '
-      'running what looks like a ${v.scamType.toLowerCase()}. ${_situationSentence[s]}');
+      'running $what. ${_situationSentence[s]}');
   if (s == Situation.lostMoney && (d.amount.isNotEmpty || d.paidTo.isNotEmpty)) {
     b.write(' I transferred ${d.amount.isEmpty ? 'money' : d.amount}');
     if (d.paidFromBank.isNotEmpty) b.write(' from my ${d.paidFromBank} account');
@@ -153,16 +171,19 @@ String incidentDescription(Investigation inv, ReportDetails d, Situation s) {
     if (d.transactionRef.isNotEmpty) b.write(' The transaction reference is ${d.transactionRef}.');
   }
   if (signs.isNotEmpty) b.write(' Warning signs: ${signs.join(', ')}.');
+  if (d.story.trim().isNotEmpty) b.write(' In my words: ${d.story.trim()}');
   return b.toString();
 }
 
 /// The fields each channel's form asks for, in the order it asks for them.
 /// Empty fields are left out.
-List<PackField> reportPack(Channel c, Investigation inv, ReportDetails d, Situation s, String scamText) {
-  final ents = inv.artefact.entities;
+List<PackField> reportPack(Channel c, Investigation? inv, ReportDetails d, Situation s, String scamText) {
+  final ents = inv?.artefact.entities ?? const <Entity>[];
   String list(EntityType t) => ents.where((e) => e.type == t).map((e) => e.value).toSet().join(', ');
   final account = d.paidTo.isNotEmpty ? d.paidTo : list(EntityType.bankAccount);
-  final profile = [list(EntityType.handle), list(EntityType.phone), list(EntityType.url)].where((x) => x.isNotEmpty).join(', ');
+  final profile = [d.scammerContact.trim(), list(EntityType.handle), list(EntityType.phone), list(EntityType.url)]
+      .where((x) => x.isNotEmpty)
+      .join(', ');
   final f = <String, String>{
     'amount': d.amount,
     'date': d.when,
@@ -170,7 +191,7 @@ List<PackField> reportPack(Channel c, Investigation inv, ReportDetails d, Situat
     'account': account,
     'scammerBank': d.scammerBank,
     'reference': d.transactionRef,
-    'phone': list(EntityType.phone),
+    'phone': [d.scammerContact.trim(), list(EntityType.phone)].where((x) => x.isNotEmpty).join(', '),
     'link': list(EntityType.url),
     'profile': profile,
     'how': d.contactMethod,
@@ -194,6 +215,7 @@ List<PackField> reportPack(Channel c, Investigation inv, ReportDetails d, Situat
   final order = switch (c.id) {
     'nsrc' || 'bank' => ['amount', 'date', 'bank', 'account', 'scammerBank', 'reference', 'description'],
     'police' => ['date', 'how', 'description', 'amount', 'bank', 'account', 'scammerBank', 'reference', 'phone', 'link', 'message'],
+    'mcmc' when inv == null => ['phone', 'how', 'date', 'description'],
     'semakmule' => ['account', 'phone'],
     'mcmc' => ['phone', 'link', 'date', 'description', 'message'],
     _ => ['profile', 'description', 'message'],
@@ -202,15 +224,15 @@ List<PackField> reportPack(Channel c, Investigation inv, ReportDetails d, Situat
 }
 
 /// The report text shared with every channel. [scamText] is already redacted.
-String buildReport(Investigation inv, String scamText, ReportDetails d, Situation s) {
-  final v = inv.verdict;
-  final ents = inv.artefact.entities;
+String buildReport(Investigation? inv, String scamText, ReportDetails d, Situation s) {
+  final v = inv?.verdict;
+  final ents = inv?.artefact.entities ?? const <Entity>[];
   String list(EntityType t) => ents.where((e) => e.type == t).map((e) => e.value).toSet().join(', ');
   final b = StringBuffer()
     ..writeln('SCAM REPORT (prepared with Kantoi)')
-    ..writeln('Situation: ${situationLabels[s]}')
-    ..writeln('Type: ${v.scamType} (risk ${v.score}/100, ${riskLabel(v.level)})')
-    ..writeln();
+    ..writeln('Situation: ${situationLabels[s]}');
+  if (v != null) b.writeln('Type: ${v.scamType} (risk ${v.score}/100, ${riskLabel(v.level)})');
+  b.writeln();
   if (d.amount.isNotEmpty || d.when.isNotEmpty || d.paidTo.isNotEmpty) {
     b.writeln('TRANSACTION');
     if (d.amount.isNotEmpty) b.writeln('Amount: ${d.amount}');
@@ -232,18 +254,30 @@ String buildReport(Investigation inv, String scamText, ReportDetails d, Situatio
     final v = list(t);
     if (v.isNotEmpty) b.writeln('$label: $v');
   }
+  if (d.scammerContact.trim().isNotEmpty) b.writeln('Their number, profile or link: ${d.scammerContact.trim()}');
   if (d.contactMethod.isNotEmpty) b.writeln('How they contacted me: ${d.contactMethod}');
-  for (final u in inv.urls.where((u) => u.hops.length > 1 || u.imitates != null)) {
+  for (final u in (inv?.urls ?? const <UrlReport>[]).where((u) => u.hops.length > 1 || u.imitates != null)) {
     b.writeln('Link ${u.input} leads to ${u.finalUrl}${u.imitates != null ? ' (imitates ${u.imitates})' : ''}'
         '${u.domainAgeDays != null ? ', registered ${u.domainAgeDays} days ago' : ''}');
   }
-  b
-    ..writeln()
-    ..writeln('WARNING SIGNS FOUND')
-    ..writeln(inv.findings.where((f) => f.isRisk).map((f) => '- ${f.title}: ${f.explanation}').toSet().join('\n'))
-    ..writeln()
-    ..writeln('ORIGINAL MESSAGE (my personal details masked)')
-    ..writeln(scamText);
+  if (d.story.trim().isNotEmpty) {
+    b
+      ..writeln()
+      ..writeln('WHAT HAPPENED')
+      ..writeln(d.story.trim());
+  }
+  if (inv != null) {
+    b
+      ..writeln()
+      ..writeln('WARNING SIGNS FOUND')
+      ..writeln(inv.findings.where((f) => f.isRisk).map((f) => '- ${f.title}: ${f.explanation}').toSet().join('\n'));
+  }
+  if (scamText.trim().isNotEmpty) {
+    b
+      ..writeln()
+      ..writeln('ORIGINAL MESSAGE (my personal details masked)')
+      ..writeln(scamText);
+  }
   return b.toString().trim();
 }
 
@@ -254,7 +288,7 @@ String callScript(ReportDetails d, Investigation? inv) {
       : inv?.artefact.entities.where((e) => e.type == EntityType.bankAccount).map((e) => e.value).firstOrNull ?? '[account number]';
   return 'Hello, I want to report a scam and stop a transfer.\n'
       'I transferred ${d.amount.isEmpty ? '[amount]' : d.amount} on ${d.when.isEmpty ? '[date and time]' : d.when}'
-      '${d.paidFromBank.isEmpty ? '' : ' from my ${d.paidFromBank} account'}.\n'
+      ' from my ${d.paidFromBank.isEmpty ? '[your bank]' : d.paidFromBank} account.\n'
       'It went to account $to.\n'
       '${d.transactionRef.isEmpty ? '' : 'The transaction reference is ${d.transactionRef}.\n'}'
       'It was a ${inv?.verdict.scamType.toLowerCase() ?? 'scam'}. Please help freeze the money and give me a case reference number.';

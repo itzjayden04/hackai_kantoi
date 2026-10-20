@@ -21,6 +21,7 @@ import 'package:kantoi/engine/review.dart';
 import 'package:kantoi/engine/rhythm.dart';
 import 'package:kantoi/local_store.dart';
 import 'package:kantoi/state.dart';
+import 'package:kantoi/ui/emergency/hotlines.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const offline = InvestigateOptions(llm: LlmConfig(kind: LlmKind.none), network: false);
@@ -263,6 +264,34 @@ void main() {
       );
       expect(String.fromCharCodes(pdf.take(4)), '%PDF');
       expect(pdfSafe('a 😀 b ✓ “c”'), 'a ? b (done) "c"');
+    });
+
+    test('report without a checked message uses what the user typed', () async {
+      final d = ReportDetails()
+        ..amount = 'RM900'
+        ..scammerContact = '+60 11-2222 3333'
+        ..story = 'They said my parcel had drugs.';
+      final text = buildReport(null, '', d, Situation.lostMoney);
+      expect(text, contains('They said my parcel had drugs.'));
+      expect(text, contains('+60 11-2222 3333'));
+      expect(text, isNot(contains('Type:')));
+      expect(text, isNot(contains('ORIGINAL MESSAGE')));
+      final pack = reportPack(police, null, d, Situation.lostMoney, '');
+      expect(pack.map((f) => f.label), containsAll(['Description', 'Amount', "Scammer's phone number"]));
+      expect(reportPack(mcmc, null, d, Situation.lostMoney, '').first.value, '+60 11-2222 3333');
+      expect(authorities.map(authorityLabel), ['Police', 'NSRC 997', 'Bank', 'MCMC']);
+      final pdf = await buildPdfReport(inv: null, scamText: '', details: d, situation: Situation.lostMoney);
+      expect(String.fromCharCodes(pdf.take(4)), '%PDF');
+    });
+
+    test('bank hotlines are dialable and the call script shows blanks', () {
+      for (final h in bankHotlines) {
+        expect(h.dial, matches(RegExp(r'^0\d{8,9}$')), reason: h.bank);
+      }
+      expect(nsrcNumber, '997');
+      final script = callScript(ReportDetails(), null);
+      expect(script, contains('[amount]'));
+      expect(script, contains('[your bank]'));
     });
 
     test('case checklist summary and reminders', () {

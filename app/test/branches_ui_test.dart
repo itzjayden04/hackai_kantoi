@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kantoi/engine/cases.dart';
 import 'package:kantoi/engine/investigator.dart';
 import 'package:kantoi/engine/llm.dart';
+import 'package:kantoi/engine/report.dart';
 import 'package:kantoi/local_store.dart';
 import 'package:kantoi/ui/case_tracker.dart';
 import 'package:kantoi/ui/emergency_page.dart';
@@ -28,13 +29,29 @@ void main() {
         options: const InvestigateOptions(llm: LlmConfig(kind: LlmKind.none), network: false))))!;
     await t.pumpWidget(wrap(const RelationshipPage()));
     expect(find.text('Can I trust this person?'), findsOneWidget);
-    await t.pumpWidget(MaterialApp(home: ReportPage(inv: inv)));
+    await t.pumpWidget(MaterialApp(home: ReportPage(inv: inv, initial: Situation.lostMoney)));
     expect(find.textContaining('Evidence screenshots'), findsOneWidget);
-    await t.tap(find.text('I have checked it. Approve report'));
-    await t.pump();
-    expect(find.textContaining('Copy each answer'), findsWidgets);
+    expect(find.text('Incident sheet'), findsOneWidget);
+    expect(find.text('FOR POLICE'), findsOneWidget);
+    await t.tap(find.text('MCMC'));
+    await t.pump(const Duration(milliseconds: 600));
+    expect(find.text('FOR MCMC'), findsOneWidget);
+    expect(find.text('Copy all'), findsOneWidget);
+    // Masking can be switched off.
+    await t.tap(find.byType(Switch).first);
+    await t.pump(const Duration(milliseconds: 600));
+    expect(t.widget<Switch>(find.byType(Switch).first).value, isFalse);
+    await t.pumpWidget(MaterialApp(home: ReportPage(key: UniqueKey(), initial: Situation.lostMoney)));
+    expect(find.text('Their number, profile or link'), findsOneWidget);
     await t.pumpWidget(MaterialApp(home: EmergencyPage(inv: inv)));
-    expect(find.textContaining('Call 997'), findsWidgets);
+    await t.pumpAndSettle();
+    expect(find.text('Call 997 now'), findsOneWidget);
+    expect(find.text('What to do right now'), findsOneWidget);
+    expect(find.text('0 OF ${caseSteps.length} DONE'), findsOneWidget);
+    await t.tap(find.text('Keep the evidence'));
+    await t.pumpAndSettle();
+    expect(find.text('1 OF ${caseSteps.length} DONE'), findsOneWidget);
+    expect(find.text('Bank fraud lines'), findsOneWidget);
     await t.pumpWidget(wrap(SingleChildScrollView(child: ResultView(inv: inv))));
     expect(find.text('This was actually legit'), findsOneWidget);
     await t.tap(find.text('This was actually a scam'));
@@ -46,6 +63,25 @@ void main() {
     expect(find.text('Kantoi does not detect'), findsOneWidget);
     await t.pumpWidget(wrap(const SettingsPage()));
     expect(find.text('Delete all my Kantoi data'), findsOneWidget);
+  });
+
+  testWidgets('emergency and report fit a small phone', (t) async {
+    t.view.physicalSize = const Size(360, 740);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final inv = (await t.runAsync(() => investigate('Transfer RM500 to Maybank account 5642 1234 5678 today only',
+        options: const InvestigateOptions(llm: LlmConfig(kind: LlmKind.none), network: false))))!;
+    for (final w in <Widget>[
+      const Scaffold(body: EmergencyPage(embedded: true)),
+      EmergencyPage(inv: inv),
+      ReportPage(inv: inv, initial: Situation.lostMoney),
+      const ReportPage(),
+      const Scaffold(body: SettingsPage()),
+    ]) {
+      await t.pumpWidget(MaterialApp(home: w));
+      await t.pump(const Duration(seconds: 1));
+      expect(t.takeException(), isNull, reason: w.toStringShort());
+    }
   });
 
   testWidgets('reminder banner shows for an old open case', (t) async {

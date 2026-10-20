@@ -1,5 +1,5 @@
 /// A clean PDF report to bring to the police station or attach to a bank
-/// dispute. Pure Dart, so it works the same on Windows, Android and the web.
+/// dispute. Pure Dart, so it needs no platform code.
 library;
 
 import 'dart:typed_data';
@@ -46,7 +46,7 @@ String _fmt(DateTime t) {
 }
 
 Future<Uint8List> buildPdfReport({
-  required Investigation inv,
+  required Investigation? inv,
   required String scamText,
   required ReportDetails details,
   required Situation situation,
@@ -55,7 +55,7 @@ Future<Uint8List> buildPdfReport({
   DateTime? now,
 }) async {
   final generated = now ?? DateTime.now();
-  final v = inv.verdict;
+  final v = inv?.verdict;
   final doc = pw.Document(title: 'Scam report', author: 'Kantoi', creator: 'Kantoi');
   const accent = PdfColor.fromInt(0xFF1E3A8A);
   final h = pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: accent);
@@ -83,12 +83,12 @@ Future<Uint8List> buildPdfReport({
         ],
       );
 
-  final ents = inv.artefact.entities;
+  final ents = inv?.artefact.entities ?? const <Entity>[];
   String list(EntityType t) => ents.where((e) => e.type == t).map((e) => e.value).toSet().join(', ');
   final account = details.paidTo.isNotEmpty ? details.paidTo : list(EntityType.bankAccount);
 
   final timeline = <(String, String)>[
-    (_fmt(inv.artefact.receivedAt), 'Message checked with Kantoi'),
+    if (inv != null) (_fmt(inv.artefact.receivedAt), 'Message checked with Kantoi'),
     if (details.when.isNotEmpty) (details.when, situation == Situation.lostMoney ? 'Money transferred (as I recall)' : 'Incident (as I recall)'),
     if (scamCase != null)
       for (final s in caseSteps)
@@ -114,6 +114,7 @@ Future<Uint8List> buildPdfReport({
       ('Emails', EntityType.email),
     ])
       if (list(t).isNotEmpty) (label, list(t)),
+    if (details.scammerContact.trim().isNotEmpty) ('Their number, profile or link', details.scammerContact.trim()),
     if (details.contactMethod.isNotEmpty) ('How they contacted me', details.contactMethod),
   ];
 
@@ -155,10 +156,11 @@ Future<Uint8List> buildPdfReport({
         pw.SizedBox(height: 4),
         p(incidentDescription(inv, details, situation)),
       ]),
-      section('Timeline', [table(timeline)]),
+      if (timeline.isNotEmpty) section('Timeline', [table(timeline)]),
       if (transaction.isNotEmpty) section('Transaction details', [table(transaction)]),
-      section('Scammer identifiers', [identifiers.isEmpty ? p('None found in the message.') : table(identifiers)]),
-      section('The message (my personal details masked)', [
+      section('Scammer identifiers', [identifiers.isEmpty ? p(inv == null ? 'None given.' : 'None found in the message.') : table(identifiers)]),
+      if (scamText.trim().isNotEmpty)
+        section('The message (my personal details masked)', [
         pw.Container(
           width: double.infinity,
           padding: const pw.EdgeInsets.all(10),
@@ -166,16 +168,18 @@ Future<Uint8List> buildPdfReport({
           child: p(scamText),
         ),
       ]),
-      section('Kantoi verdict', [
-        table([
-          ('Result', '${riskLabel(v.level)} (risk ${v.score}/100, confidence ${v.confidence}%)'),
-          ('Type', v.scamType),
-          ('Summary', v.headline),
+      if (v != null)
+        section('Kantoi verdict', [
+          table([
+            ('Result', '${riskLabel(v.level)} (risk ${v.score}/100, confidence ${v.confidence}%)'),
+            ('Type', v.scamType),
+            ('Summary', v.headline),
+          ]),
         ]),
-      ]),
       section('Evidence summary', [
-        for (final f in inv.findings.where((f) => f.isRisk).toList()) p('- ${f.title}: ${f.explanation}'),
-        for (final u in inv.urls)
+        if (inv == null && images.isEmpty) p('- No message was checked with Kantoi for this report.'),
+        for (final f in (inv?.findings ?? const <Finding>[]).where((f) => f.isRisk)) p('- ${f.title}: ${f.explanation}'),
+        for (final u in inv?.urls ?? const <UrlReport>[])
           p('- Link ${u.input} leads to ${u.finalUrl}${u.imitates != null ? ' (imitates ${u.imitates})' : ''}'
               '${u.domainAgeDays != null ? ', website registered ${u.domainAgeDays} days ago' : ''}.'),
         if (images.isNotEmpty) p('- ${images.length} screenshot(s) attached on the following page(s).'),

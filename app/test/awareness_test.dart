@@ -16,6 +16,7 @@ import 'package:kantoi/ui/explainer_card.dart';
 import 'package:kantoi/ui/guardian_ui.dart';
 import 'package:kantoi/ui/learn_page.dart';
 import 'package:kantoi/ui/result_view.dart';
+import 'package:kantoi/ui/learn/scam_story.dart';
 import 'package:kantoi/ui/warning_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -272,7 +273,8 @@ void main() {
     testWidgets('Learn tab shows practice, check-up, guardian and library', (t) async {
       await t.pumpWidget(const MaterialApp(home: Scaffold(body: LearnPage())));
       await t.pumpAndSettle();
-      expect(find.text('Practice: 2 minutes'), findsOneWidget);
+      expect(find.text('Spot the scam'), findsOneWidget);
+      expect(find.text('Your practice score'), findsOneWidget);
       expect(find.text('Safety check-up'), findsOneWidget);
       expect(find.text('Add a family guardian'), findsOneWidget);
       expect(find.text('Parcel fee scam'), findsOneWidget);
@@ -282,11 +284,39 @@ void main() {
       await t.pumpWidget(const MaterialApp(home: DrillPage()));
       await t.pumpAndSettle();
       expect(find.text('Practice. This is not a real message.'), findsOneWidget);
+      expect(find.text('Question 1 of 5'), findsOneWidget);
       await t.ensureVisible(find.text('Scam'));
       await t.tap(find.text('Scam'));
       await t.pumpAndSettle();
-      expect(find.text('Next practice'), findsOneWidget);
+      expect(find.text('Next question'), findsOneWidget);
       expect(find.text('Practice. This is not a real message.'), findsOneWidget);
+    });
+
+    testWidgets('a quiz round ends with a personal score', (t) async {
+      await t.pumpWidget(MaterialApp(home: DrillPage(rounds: 2, first: drills.first)));
+      await t.pumpAndSettle();
+      for (var i = 0; i < 2; i++) {
+        await t.ensureVisible(find.text('Scam'));
+        await t.pumpAndSettle();
+        await t.tap(find.text('Scam'));
+        await t.pumpAndSettle();
+        await t.ensureVisible(find.text(i == 0 ? 'Next question' : 'See my score'));
+        await t.pumpAndSettle();
+        await t.tap(find.text(i == 0 ? 'Next question' : 'See my score'));
+        await t.pumpAndSettle();
+      }
+      expect(find.textContaining('/2'), findsOneWidget);
+      expect(find.text('Practice again'), findsOneWidget);
+      expect(find.textContaining('Top'), findsNothing);
+    });
+
+    testWidgets('scam story page shows steps and practice', (t) async {
+      final e = explainers.firstWhere((e) => e.id == 'parcel');
+      await t.pumpWidget(MaterialApp(home: ScamStoryPage(e: e)));
+      await t.pumpAndSettle();
+      expect(find.text('How it happens'), findsOneWidget);
+      expect(find.text(e.steps.first), findsOneWidget);
+      expect(find.text('Made-up example for learning'), findsOneWidget);
     });
 
     testWidgets('result view shows the explainer tile and the picture option', (t) async {
@@ -323,11 +353,12 @@ void main() {
         const CheckupPage(),
         const GuardianPage(),
         for (final e in [...explainers, generalExplainer]) ExplainerPage(e: e),
+        for (final e in explainers) ScamStoryPage(e: e),
         WarningImagePage(content: WarningContent.fromExplainer(explainers.first)),
       ]) {
         await t.pumpWidget(MaterialApp(home: w));
         await t.pumpAndSettle();
-        expect(t.takeException(), isNull);
+        expect(t.takeException(), isNull, reason: w.toStringShort());
       }
       for (final d in drills) {
         await t.pumpWidget(MaterialApp(home: DrillPage(key: ValueKey(d.id), first: d)));
