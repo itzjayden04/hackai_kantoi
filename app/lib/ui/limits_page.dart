@@ -9,7 +9,11 @@ class LimitsPage extends StatelessWidget {
 
   static const _cannot = [
     ('Voice and video calls', 'Kantoi cannot listen to calls or spot deepfake voices or faces. If someone calls asking for money, hang up and call back on a number you already know.'),
-    ('Attachments, apps and files', 'Kantoi does not open PDFs, APK apps or other files. Never install an app sent by message.'),
+    (
+      'What apps and files do',
+      'Kantoi reads the words in screenshots, PDFs and Word files and the permissions an app file (APK) asks for, but it never runs them, '
+          'so it cannot see what an app does once installed. Never install an app sent by message.'
+    ),
     ('Messages with no warning words', 'A scammer who writes politely, with no link, no money request and no pressure, can look safe until the money request comes.'),
     ('Who is really behind an account', 'Kantoi judges messages and patterns. It cannot prove who a person is, and a relationship result is "consistent with" a scam, not proof.'),
     ('Brand-new scam scripts', 'The built-in checks know common Malaysian scams. A new trick may only be caught by the AI explanation, or not at all.'),

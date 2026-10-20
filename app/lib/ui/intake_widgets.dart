@@ -48,48 +48,6 @@ Future<bool> askMediaConsent(BuildContext context, [String what = 'recording']) 
   return ok == true;
 }
 
-/// The two big triage buttons at the top of the Check tab.
-class TriageButtons extends StatelessWidget {
-  final VoidCallback onUnsure;
-  final VoidCallback onPaid;
-  const TriageButtons({super.key, required this.onUnsure, required this.onPaid});
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    Widget big(IconData icon, String label, String sub, Color color, VoidCallback onTap) => Expanded(
-          child: Material(
-            color: color.withValues(alpha: 0.08),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: color.withValues(alpha: 0.4))),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: onTap,
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(children: [
-                  Icon(icon, color: color, size: 30),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(label, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: color)),
-                      Text(sub, style: Theme.of(context).textTheme.bodySmall),
-                    ]),
-                  ),
-                ]),
-              ),
-            ),
-          ),
-        );
-    return IntrinsicHeight(
-      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        big(Icons.help_outline_rounded, "I'm not sure about this", 'Check a message, link or file', scheme.primary, onUnsure),
-        const SizedBox(width: 10),
-        big(Icons.emergency_rounded, 'I already paid or gave my details', 'Get help right now', const Color(0xFFB91C1C), onPaid),
-      ]),
-    );
-  }
-}
-
 /// Full-screen camera that returns the first QR code it reads, decoded on
 /// the device.
 class QrScanPage extends StatefulWidget {
@@ -123,7 +81,7 @@ class _QrScanPageState extends State<QrScanPage> {
             errorBuilder: (context, error) => Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text('The camera could not start. Allow camera access, or take a photo of the QR code and use "Add file".',
+                child: Text('The camera could not start. Allow camera access, or take a photo of the QR code and add it with the picture button on the Check tab.',
                     textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleMedium),
               ),
             ),
@@ -188,7 +146,7 @@ class _IntakeSettingsSectionState extends State<IntakeSettingsSection> {
       ),
       const SectionTitle('Telegram bot'),
       Text('Forward a message to your own Telegram bot and get the verdict back. Create a bot with @BotFather and paste its token here. '
-          'The bot runs while this app is open on your computer.', style: t.bodyMedium),
+          'The bot answers while Kantoi is open on this phone.', style: t.bodyMedium),
       const SizedBox(height: 10),
       TextField(
         controller: _tg,

@@ -6,12 +6,23 @@ import '../engine/models.dart';
 import '../engine/relationship.dart';
 import '../engine/relationship_check.dart';
 import '../state.dart';
-import 'activity_log.dart';
+import 'check/result_parts.dart';
 import 'emergency_page.dart';
 import 'feedback_bar.dart';
 import 'result_view.dart' show HighlightedText;
 import '../intake/chat_export.dart';
+import 'kit.dart';
 import 'theme.dart';
+
+/// The relationship check on its own screen, opened from the Check tab.
+class RelationshipScreen extends StatelessWidget {
+  const RelationshipScreen({super.key});
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Check a person or chat')),
+        body: const RelationshipPage(),
+      );
+}
 
 class RelationshipPage extends StatefulWidget {
   const RelationshipPage({super.key});
@@ -99,11 +110,15 @@ class _RelationshipPageState extends State<RelationshipPage> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return PageBody(children: [
-      Text('Can I trust this person?', style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
-      const SizedBox(height: 4),
+      Row(children: [
+        const IconTile(Icons.people_outline_rounded, size: 44),
+        const SizedBox(width: 12),
+        Expanded(child: Text('Can I trust this person?', style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w700))),
+      ]),
+      const SizedBox(height: 8),
       Text('Love, investment and job scams build trust over weeks before asking for money. '
           'Kantoi reads the whole conversation and scores how closely it follows a scam script.',
-          style: t.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          style: t.bodyMedium?.copyWith(color: K.onSurfaceVariant)),
       const SizedBox(height: 16),
       SegmentedButton<bool>(
         segments: const [
@@ -117,9 +132,23 @@ class _RelationshipPageState extends State<RelationshipPage> {
         }),
       ),
       const SizedBox(height: 16),
-      if (!_quiz) ..._chatForm(t) else ..._quizForm(t),
-      if (_busy) ...[const SizedBox(height: 16), const LinearProgressIndicator(), const SizedBox(height: 8), ActivityLog(steps: _steps)],
-      if (_report != null) ...[const SizedBox(height: 20), RelationshipResult(report: _report!, messages: _quiz ? const [] : _msgs)],
+      KCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [if (!_quiz) ..._chatForm(t) else ..._quizForm(t)]),
+      ),
+      const SizedBox(height: 16),
+      AnimatedSize(
+        duration: K.medium,
+        curve: K.curve,
+        alignment: Alignment.topCenter,
+        child: AnimatedSwitcher(
+          duration: K.medium,
+          child: _busy
+              ? PipelineView(key: const ValueKey('busy'), steps: _steps)
+              : _report != null
+                  ? RelationshipResult(key: ObjectKey(_report), report: _report!, messages: _quiz ? const [] : _msgs)
+                  : const SizedBox.shrink(),
+        ),
+      ),
     ]);
   }
 
@@ -224,11 +253,14 @@ class RelationshipResult extends StatelessWidget {
     final signals = [...report.signals]..sort((a, b) => b.weight.compareTo(a.weight));
     final keyMessages = report.keyMessages.where((i) => i < messages.length).toList();
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Card(
-        color: c.withValues(alpha: 0.08),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: c.withValues(alpha: 0.5), width: 1.5)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
+      Reveal(
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: c.withValues(alpha: 0.07),
+            borderRadius: const BorderRadius.all(Radius.circular(20)),
+            border: Border.all(color: c.withValues(alpha: 0.35)),
+          ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Icon(riskIcon(report.level), color: c, size: 34),
@@ -251,7 +283,7 @@ class RelationshipResult extends StatelessWidget {
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
                 child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Icon(Icons.arrow_forward_rounded, color: c),
                   const SizedBox(width: 10),
@@ -262,7 +294,7 @@ class RelationshipResult extends StatelessWidget {
             if (report.level.index >= RiskLevel.caution.index) ...[
               const SizedBox(height: 12),
               FilledButton.icon(
-                style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+                style: FilledButton.styleFrom(backgroundColor: K.red),
                 icon: const Icon(Icons.emergency_rounded),
                 label: const Text('I already paid'),
                 onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmergencyPage())),
@@ -296,7 +328,7 @@ class RelationshipResult extends StatelessWidget {
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: Icon(s.weight > 0 ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
-              color: s.weight > 0 ? const Color(0xFFDC2626) : const Color(0xFF15803D)),
+              color: s.weight > 0 ? K.red : K.green),
           title: Text(s.title, style: const TextStyle(fontWeight: FontWeight.w700)),
           subtitle: Text('${s.group} · ${s.detail}'),
         ),
@@ -307,11 +339,16 @@ class RelationshipResult extends StatelessWidget {
         Wrap(spacing: 8, runSpacing: 8, children: [for (final id in report.identifiers) Chip(label: SelectableText(id))]),
       ],
       if (report.log.isNotEmpty) ...[
-        const SectionTitle('How Kantoi checked'),
-        ActivityLog(steps: report.log),
+        const SizedBox(height: 16),
+        ExpandableSection(
+          icon: Icons.account_tree_outlined,
+          title: 'How Kantoi checked this',
+          subtitle: '${report.log.length} steps, each marked on this phone or online',
+          children: [PipelineView(steps: report.log, finished: true)],
+        ),
       ],
       const SizedBox(height: 12),
-      FeedbackBar(key: ObjectKey(report), relationship: report),
+      KCard(color: K.surfaceLow, borderColor: Colors.transparent, child: FeedbackBar(key: ObjectKey(report), relationship: report)),
     ]);
   }
 

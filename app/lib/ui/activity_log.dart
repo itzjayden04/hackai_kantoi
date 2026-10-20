@@ -33,7 +33,7 @@ class ActivityLog extends StatelessWidget {
                 const SizedBox(width: 8),
                 Tooltip(
                   message: s.sentOffDevice ? 'This step contacted an online service' : 'This step ran on your device',
-                  child: Icon(s.sentOffDevice ? Icons.cloud_outlined : Icons.phonelink_lock_outlined, size: 18, color: outline),
+                  child: Icon(s.sentOffDevice ? Icons.cloud_outlined : Icons.lock_outline_rounded, size: 18, color: outline),
                 ),
               ]),
             ),

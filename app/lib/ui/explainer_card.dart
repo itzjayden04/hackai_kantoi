@@ -4,6 +4,7 @@ import '../awareness/coach.dart';
 import '../awareness/drills.dart';
 import '../awareness/explainers.dart';
 import '../engine/models.dart';
+import 'check/result_parts.dart';
 import 'drill_page.dart';
 import 'theme.dart';
 import 'warning_image.dart';
@@ -35,7 +36,7 @@ class ExplainerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
-    final accent = e.genuine ? const Color(0xFF15803D) : const Color(0xFFDC2626);
+    final accent = e.genuine ? K.green : K.red;
     Widget head(String s) => Padding(
           padding: const EdgeInsets.only(top: 16, bottom: 6),
           child: Text(s, style: t.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
@@ -122,23 +123,12 @@ class ExplainerTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final e = explainerForInvestigation(inv);
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            leading: Icon(explainerIcon(e.id), color: scheme.primary),
-            title: Text(e.genuine ? 'How to tell a genuine message' : 'How this scam works',
-                style: const TextStyle(fontWeight: FontWeight.w700)),
-            subtitle: Text('${e.name}. 30-second read.'),
-            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            children: [ExplainerCard(e: e, showTitle: false)],
-          ),
-        ),
-      ),
+    return ExpandableSection(
+      icon: explainerIcon(e.id),
+      color: e.genuine ? K.green : K.primary,
+      title: e.genuine ? 'How to tell a genuine message' : 'How this scam works',
+      subtitle: '${e.name}. 30-second read.',
+      children: [ExplainerCard(e: e, showTitle: false)],
     );
   }
 }
