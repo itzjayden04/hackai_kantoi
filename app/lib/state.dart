@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'engine/forensics/keys.dart';
 import 'engine/investigator.dart';
 import 'engine/llm.dart';
 import 'engine/models.dart';
@@ -22,6 +23,8 @@ class LiveItem {
 class AppState extends ChangeNotifier {
   LlmConfig llm = LlmConfig.defaults;
   Set<String> ownDetails = {};
+  /// Optional link reputation keys (built-in defaults, overridable in Settings).
+  ForensicKeys keys = ForensicKeys.defaults;
   final List<Investigation> history = [];
   final List<LiveItem> live = [];
   bool extensionConnected = false;
@@ -31,7 +34,7 @@ class AppState extends ChangeNotifier {
   /// Set by the shell so a live alert or a deep link can open a result.
   void Function(Investigation)? openResult;
 
-  InvestigateOptions get options => InvestigateOptions(llm: llm, ownDetails: ownDetails);
+  InvestigateOptions get options => InvestigateOptions(llm: llm, ownDetails: ownDetails, keys: keys);
 
   Future<void> load() async {
     try {
@@ -45,6 +48,8 @@ class AppState extends ChangeNotifier {
             : saved;
       }
       ownDetails = (p.getStringList('ownDetails') ?? []).toSet();
+      final k = p.getString('forensicKeys');
+      if (k != null) keys = ForensicKeys.fromJson(jsonDecode(k) as Map<String, dynamic>);
     } catch (_) {}
     notifyListeners();
   }
@@ -54,6 +59,13 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     final p = await SharedPreferences.getInstance();
     await p.setString('llm', jsonEncode(c.toJson()));
+  }
+
+  Future<void> saveKeys(ForensicKeys k) async {
+    keys = k;
+    notifyListeners();
+    final p = await SharedPreferences.getInstance();
+    await p.setString('forensicKeys', jsonEncode(k.userValues()));
   }
 
   Future<void> saveOwnDetails(Set<String> v) async {

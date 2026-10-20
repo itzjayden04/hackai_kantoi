@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'punycode.dart';
+import 'forensics/homoglyphs.dart' show foldConfusables;
 
 import 'models.dart';
 
@@ -39,6 +40,25 @@ const Map<String, List<String>> brands = {
   'WhatsApp': ['whatsapp.com', 'wa.me'],
   'Telegram': ['telegram.org', 't.me'],
   'Netflix': ['netflix.com'],
+  // More Malaysian banks, couriers, utilities and agencies (official domains).
+  'Affin Bank': ['affinbank.com.my', 'affinalways.com'],
+  'Alliance Bank': ['alliancebank.com.my'],
+  'OCBC': ['ocbc.com.my'],
+  'UOB': ['uob.com.my'],
+  'HSBC': ['hsbc.com.my'],
+  'Standard Chartered': ['sc.com'],
+  'Bank Rakyat': ['bankrakyat.com.my'],
+  'Agrobank': ['agrobank.com.my'],
+  'MBSB Bank': ['mbsbbank.com'],
+  'GDEX': ['gdexpress.com'],
+  'Ninja Van': ['ninjavan.co'],
+  'City-Link': ['citylinkexpress.com'],
+  'TNB': ['tnb.com.my', 'mytnb.com.my'],
+  'MCMC': ['mcmc.gov.my'],
+  'SSM': ['ssm.com.my'],
+  'PERKESO': ['perkeso.gov.my'],
+  'JPN': ['jpn.gov.my'],
+  'Imigresen': ['imi.gov.my'],
 };
 
 /// Words in a hostname that point at a brand, used to catch imitations such as
@@ -52,6 +72,8 @@ const Map<String, String> _brandKeywords = {
   'kwsp': 'KWSP', 'myeg': 'MyEG', 'banknegara': 'Bank Negara', 'paypal': 'PayPal', 'apple': 'Apple',
   'icloud': 'Apple', 'microsoft': 'Microsoft', 'office365': 'Microsoft', 'facebook': 'Facebook',
   'instagram': 'Facebook', 'whatsapp': 'WhatsApp', 'telegram': 'Telegram', 'netflix': 'Netflix', 'grab': 'Grab',
+  'gdex': 'GDEX', 'ninjavan': 'Ninja Van', 'citylink': 'City-Link', 'ocbc': 'OCBC', 'hsbc': 'HSBC', 'bankrakyat': 'Bank Rakyat',
+  'perkeso': 'PERKESO', 'mytnb': 'TNB', 'imigresen': 'Imigresen',
 };
 
 const _shorteners = {
@@ -87,13 +109,10 @@ String? officialBrandFor(String host) {
 }
 
 /// Undo common character swaps so "rnaybank" and "maybаnk" both read "maybank".
-String _deconfuse(String s) {
-  const map = {
-    '0': 'o', '1': 'l', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b', '@': 'a',
-    'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'х': 'x', 'у': 'y', 'і': 'i', 'ј': 'j', 'ԁ': 'd',
-    'ɡ': 'g', 'ո': 'n', 'ս': 'u', 'ⅼ': 'l',
-  };
-  var out = s.toLowerCase().split('').map((c) => map[c] ?? c).join();
+/// Cyrillic and Greek look-alikes and number swaps come from homoglyphs.dart;
+/// [oneAsI] reads "1" as "i" ("c1mb") instead of "l".
+String _deconfuse(String s, {bool oneAsI = false}) {
+  var out = foldConfusables(s, oneAsI: oneAsI);
   return out.replaceAll('rn', 'm').replaceAll('vv', 'w').replaceAll('-', '');
 }
 
@@ -174,7 +193,8 @@ Future<UrlAnalysis> analyzeUrl(
           ..headers['User-Agent'] =
               'Mozilla/5.0 (Linux; Android 14; SM-A546E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36';
         final res = await c.send(req).timeout(const Duration(seconds: 6));
-        await res.stream.drain<void>();
+        // Never download the body: stop reading as soon as the headers arrive.
+        await res.stream.listen(null).cancel();
         hops[hops.length - 1] = UrlHop(current.toString(), res.statusCode);
         final loc = res.headers['location'];
         if (res.statusCode >= 300 && res.statusCode < 400 && loc != null) {
@@ -229,18 +249,22 @@ Future<UrlAnalysis> analyzeUrl(
     // Brand imitation: brand word in a domain the brand does not own, or a
     // near-miss spelling of an official domain.
     final clean = _deconfuse(host);
+    final cleanI = _deconfuse(host, oneAsI: true);
     for (final k in _brandKeywords.entries) {
-      if (k.key.length >= 4 && clean.contains(k.key) || RegExp('(^|[.-])${k.key}([.-]|\$)').hasMatch(host)) {
+      if (k.key.length >= 4 && (clean.contains(k.key) || cleanI.contains(k.key)) ||
+          RegExp('(^|[.-])${k.key}([.-]|\$)').hasMatch(host) ||
+          RegExp('(^|[.-])${k.key}([.-]|\$)').hasMatch(cleanI)) {
         imitates = k.value;
         break;
       }
     }
     if (imitates == null) {
       final label = _deconfuse(reg.split('.').first);
+      final labelI = _deconfuse(reg.split('.').first, oneAsI: true);
       for (final e in brands.entries) {
         for (final d in e.value) {
           final dl = d.split('.').first;
-          if (dl.length >= 5 && levenshtein(label, dl) <= 2 && label != dl) {
+          if (dl.length >= 5 && (levenshtein(label, dl) <= 2 && label != dl || labelI == dl && reg.split('.').first != dl)) {
             imitates = e.key;
           }
         }
