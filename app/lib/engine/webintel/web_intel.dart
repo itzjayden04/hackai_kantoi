@@ -43,7 +43,7 @@ class WebIntelCache {
   final Map<String, WebIntelResult> _mem = {};
   WebIntelCache({this.persist = true});
 
-  static String keyFor(WebIdentifier id) => 'webintel.v1.${sha256.convert(utf8.encode(id.id)).toString().substring(0, 32)}';
+  static String keyFor(WebIdentifier id) => 'webintel.v2.${sha256.convert(utf8.encode(id.id)).toString().substring(0, 32)}';
 
   Future<WebIntelResult?> get(WebIdentifier id, DateTime now) async {
     var r = _mem[id.id];
@@ -121,7 +121,8 @@ class _Part {
   final bool ran;
   final bool offline;
   final GroundedAnswer? answer;
-  const _Part({this.sources = const [], this.ran = false, this.offline = false, this.answer});
+  final List<WebSource> about;
+  const _Part({this.sources = const [], this.ran = false, this.offline = false, this.answer, this.about = const []});
 }
 
 class WebIntel {
@@ -257,6 +258,10 @@ class WebIntel {
       ],
       checkedAt: at,
       offline: !ran && parts.any((p) => p.offline),
+      siteType: answer?.siteType,
+      reputation: answer?.reputation,
+      reputationSummary: answer?.reputationSummary,
+      about: [for (final p in parts) ...p.about].take(8).toList(),
     );
     if (answer?.reported == 'yes' && status != WebStatus.reported) {
       done(main, '${result.headline}. Gemini said "reported" but no page backed it up, so it is not counted.',
@@ -312,8 +317,11 @@ class WebIntel {
   Future<_Part> _engine(String name, Uri Function(String) uri, List<SearchHit> Function(String) parse, WebIdentifier id,
       LogStep Function(String, String, {bool online}) step, void Function(LogStep, String, [StepStatus]) done) async {
     final forms = id.variants.take(4).map((v) => '"$v"').join(' OR ');
-    final query = '$forms scam OR penipuan OR tipu';
-    final s = step('$webTool: $name', 'Searching $name for ${id.display} with the words scam, penipuan, tipu');
+    // For a website, also ask what it is (gambling, reviews), not only scams.
+    final site = id.kind == WebIdKind.domain;
+    final query = site ? '$forms scam OR penipuan OR tipu OR judi OR casino OR review' : '$forms scam OR penipuan OR tipu';
+    final s = step('$webTool: $name',
+        'Searching $name for ${id.display} with the words scam, penipuan, tipu${site ? ', judi, casino, review' : ''}');
     try {
       final res = await client.get(uri(query), headers: {
         'User-Agent': desktopUserAgent,
@@ -329,10 +337,12 @@ class WebIntel {
           hits.isEmpty
               ? 'No results'
               : '${hits.length} result(s), ${mentions.length} mention the ${id.kindLabel}, ${scammy.length} with scam words');
-      return _Part(ran: true, sources: [
-        for (final h in scammy)
-          WebSource(
-              title: h.title, url: h.url, domain: hostOf(h.url), snippet: h.snippet, foundVia: name, evidence: WebEvidence.snippet),
+      WebSource src(SearchHit h) =>
+          WebSource(title: h.title, url: h.url, domain: hostOf(h.url), snippet: h.snippet, foundVia: name, evidence: WebEvidence.snippet);
+      return _Part(ran: true, sources: [for (final h in scammy) src(h)], about: [
+        if (site)
+          for (final h in mentions.take(5))
+            if (hostOf(h.url) != id.key && !hostOf(h.url).endsWith('.${id.key}')) src(h),
       ]);
     } on SearchBlocked catch (e) {
       done(s, '${e.engine} asked for a robot check or refused, skipped', StepStatus.failed);

@@ -9,6 +9,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../models.dart';
 import '../pdf_report.dart' show pdfSafe;
+import '../sitecheck/site_check.dart';
 import 'trace_models.dart';
 import 'tracer.dart' show semakMuleUrl;
 
@@ -24,6 +25,19 @@ String _status(LogStep s) => switch (s.status) {
       StepStatus.running => 'running',
     };
 
+/// Purpose and reputation of one website, as label/value rows.
+List<(String, String)> siteRows(SiteReport r) => [
+      ('Website', r.domain),
+      ('Purpose', '${r.purpose.headline} (${r.purpose.confidenceLabel.toLowerCase()} confidence, from ${basisLabel(r.purpose.basis).toLowerCase()})'),
+      ('Why it matters', r.purpose.explanation),
+      if (r.purpose.reasons.isNotEmpty) ('Evidence', r.purpose.reasons.join('; ')),
+      if (r.purpose.aiPurpose != null) ('AI reading', '${purposeLabel(r.purpose.aiPurpose!)} (${((r.purpose.aiConfidence ?? 0) * 100).round()}% sure)'),
+      ('Risk from the site', r.levelLabel),
+      ('Reputation', r.reputationScore == null ? 'Not checked' : '${r.reputationLabel} (${r.reputationScore}/100)'),
+      ('Reputation summary', r.reputationSummary),
+      for (final x in r.sources) ('Source: ${x.label}', '${x.detail}${x.url == null ? '' : ' - ${x.url}'}'),
+    ];
+
 /// Nodes grouped by kind, origin first.
 List<(TraceKind, List<TraceNode>)> traceGroups(TraceState s) {
   final out = <(TraceKind, List<TraceNode>)>[];
@@ -38,9 +52,16 @@ String traceSummaryText(TraceState s) {
   final b = StringBuffer()
     ..writeln('Kantoi trace: ${s.target}')
     ..writeln('Started ${s.startedAt == null ? '-' : _fmt(s.startedAt!)}${s.finished ? '' : ' (still running)'}')
-    ..writeln('Warning level: ${traceRiskLabel(s.score)} (${s.score}/100 from the signs below)')
+    ..writeln('Warning level: ${s.riskLabel} (${s.score}/100 from the signs below)')
     ..writeln('Countries: ${s.countries.isEmpty ? 'none found' : s.countries.map(countryName).join(', ')}')
     ..writeln();
+  for (final site in s.sites) {
+    b.writeln('Website purpose and reputation:');
+    for (final (k, v) in siteRows(site)) {
+      b.writeln('  $k: $v');
+    }
+    b.writeln();
+  }
   final risks = s.flags.where((f) => f.isRisk).toList();
   if (risks.isNotEmpty) {
     b.writeln('Warning signs:');
@@ -116,11 +137,12 @@ Future<Uint8List> buildTracePdf(TraceState s, {DateTime? now}) async {
           ('Type', s.kind),
           ('Started', s.startedAt == null ? '-' : _fmt(s.startedAt!)),
           ('Status', s.finished ? (s.cancelled ? 'Stopped early' : 'Finished') : 'Still running when exported'),
-          ('Warning level', '${traceRiskLabel(s.score)} (${s.score}/100 from the signs below)'),
+          ('Warning level', '${s.riskLabel} (${s.score}/100 from the signs below)'),
           ('Items found', '${s.entityCount}'),
           ('Countries', s.countries.isEmpty ? 'None found' : s.countries.map(countryName).join(', ')),
         ]),
       ]),
+      for (final site in s.sites) section('Website purpose and reputation: ${site.domain}', [table(siteRows(site))]),
       if (s.flags.isNotEmpty)
         section('Signs found', [
           for (final f in s.flags) p('${f.isRisk ? '[!]' : '[ok]'} ${f.title}: ${f.why}'),

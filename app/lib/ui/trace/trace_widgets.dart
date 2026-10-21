@@ -10,6 +10,7 @@ import '../../engine/trace/tracer.dart' show semakMuleUrl;
 import '../file_out.dart';
 import '../kit.dart';
 import '../theme.dart';
+import 'site_summary.dart';
 import 'trace_canvas.dart';
 
 String clock(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}';
@@ -127,7 +128,7 @@ class TraceHud extends StatelessWidget {
           stat('Risk level', Row(children: [
             Container(width: 8, height: 8, decoration: BoxDecoration(color: lvl, shape: BoxShape.circle)),
             const SizedBox(width: 6),
-            Flexible(child: Text(traceRiskLabel(s.score), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color.lerp(lvl, Colors.white, 0.25)))),
+            Flexible(child: Text(s.riskLabel, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color.lerp(lvl, Colors.white, 0.25)))),
           ])),
           stat('Nodes linked', Text('${s.entityCount} found', style: traceMono.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white))),
           stat('Countries',
@@ -175,7 +176,7 @@ class TraceEntityCard extends StatelessWidget {
                   style: t.bodySmall),
             ]),
           ),
-          if (s.flags.isNotEmpty) Pill(traceRiskLabel(s.score), color: riskColor(s.level)),
+          if (s.flags.isNotEmpty) Pill(s.riskLabel, color: riskColor(s.level)),
         ]),
         if (countries.isNotEmpty) ...[
           const SizedBox(height: 12),
@@ -452,7 +453,7 @@ class TraceFindingsPage extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Expanded(child: Text(s.target.replaceAll(RegExp(r'\s+'), ' '), maxLines: 2, overflow: TextOverflow.ellipsis, style: t.titleMedium)),
-              Pill(traceRiskLabel(s.score), color: riskColor(s.level)),
+              Pill(s.riskLabel, color: riskColor(s.level)),
             ]),
             const SizedBox(height: 6),
             Text(
@@ -462,6 +463,10 @@ class TraceFindingsPage extends StatelessWidget {
                 style: t.bodyMedium),
           ]),
         ),
+        for (final site in s.sites.reversed) ...[
+          const SizedBox(height: 12),
+          SiteSummaryCard(site: site),
+        ],
         if (risks.isNotEmpty) ...[
           const SectionTitle('Warning signs'),
           for (final f in risks)

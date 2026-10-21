@@ -89,6 +89,14 @@ class WebIntelResult {
   final DateTime checkedAt;
   final bool fromCache;
   final bool offline;
+
+  /// Websites only: what the site is for and its reputation as Gemini read
+  /// the Google results, and search results that mention the site at all
+  /// (not confirmed reports), for the purpose check.
+  final String? siteType;
+  final String? reputation;
+  final String? reputationSummary;
+  final List<WebSource> about;
   const WebIntelResult({
     required this.identifier,
     required this.status,
@@ -99,6 +107,10 @@ class WebIntelResult {
     required this.checkedAt,
     this.fromCache = false,
     this.offline = false,
+    this.siteType,
+    this.reputation,
+    this.reputationSummary,
+    this.about = const [],
   });
 
   List<WebSource> get confirmed => sources.where((s) => s.confirmed).toList();
@@ -127,7 +139,11 @@ class WebIntelResult {
       methods: methods,
       checkedAt: checkedAt,
       fromCache: fromCache ?? this.fromCache,
-      offline: offline);
+      offline: offline,
+      siteType: siteType,
+      reputation: reputation,
+      reputationSummary: reputationSummary,
+      about: about);
 
   Map<String, dynamic> toJson() => {
         'kind': identifier.kind.name,
@@ -138,6 +154,10 @@ class WebIntelResult {
         'summary': ?summary,
         'methods': methods,
         'checkedAt': checkedAt.toIso8601String(),
+        'siteType': ?siteType,
+        'reputation': ?reputation,
+        'reputationSummary': ?reputationSummary,
+        if (about.isNotEmpty) 'about': about.map((s) => s.toJson()).toList(),
       };
 
   static WebIntelResult? fromJson(Map<String, dynamic> j) {
@@ -150,6 +170,10 @@ class WebIntelResult {
         summary: j['summary'] as String?,
         methods: [for (final s in (j['methods'] as List? ?? const [])) '$s'],
         checkedAt: DateTime.parse('${j['checkedAt']}'),
+        siteType: j['siteType'] as String?,
+        reputation: j['reputation'] as String?,
+        reputationSummary: j['reputationSummary'] as String?,
+        about: [for (final s in (j['about'] as List? ?? const [])) WebSource.fromJson((s as Map).cast<String, dynamic>())],
       );
     } catch (_) {
       return null;

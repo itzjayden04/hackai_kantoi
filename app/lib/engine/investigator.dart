@@ -14,6 +14,7 @@ import 'llm.dart';
 import 'models.dart';
 import 'redaction.dart';
 import 'relationship.dart' show squash, levelFor;
+import 'sitecheck/site_check.dart';
 import 'url_analyzer.dart';
 import 'webintel/web_intel.dart';
 
@@ -50,6 +51,8 @@ class InvestigateOptions {
   final bool webLookup;
   /// For tests: where web results are kept (defaults to the shared 24 h cache).
   final WebIntelCache? webCache;
+  /// For tests: where website purpose and reputation checks are kept.
+  final SiteCache? siteCache;
   const InvestigateOptions({
     this.llm = LlmConfig.defaults,
     this.network = true,
@@ -59,6 +62,7 @@ class InvestigateOptions {
     this.httpClient,
     this.webLookup = true,
     this.webCache,
+    this.siteCache,
   });
 }
 
@@ -154,7 +158,16 @@ Future<Investigation> investigate(
 
   // 3. Links.
   final reports = <UrlReport>[];
+  final sites = <SiteReport>[];
   final linkClient = options.httpClient ?? http.Client();
+  final deepWeb = options.network && options.webLookup && !options.quick;
+  final checker = SiteChecker(
+    client: linkClient,
+    llm: options.quick ? const LlmConfig(kind: LlmKind.none) : options.llm,
+    keys: options.keys,
+    cache: options.siteCache,
+    webIntel: deepWeb ? WebIntel(client: linkClient, llm: options.llm, cache: options.webCache) : null,
+  );
   for (final u in urls) {
     final a = await analyzeUrl(u, network: options.network, client: options.httpClient, log: (tool, action, {sentOffDevice = false}) {
       return step(tool, action, sentOffDevice: sentOffDevice);
@@ -162,8 +175,9 @@ Future<Investigation> investigate(
     // Deep link forensics: hosting, certificates, reputation, landing page.
     var report = a.report;
     final linkFindings = [...a.findings];
+    LinkForensics? deep;
     if (options.network) {
-      final deep = await deepLinkCheck(a.report,
+      deep = await deepLinkCheck(a.report,
           log: (tool, action, {sentOffDevice = false}) => step(tool, action, sentOffDevice: sentOffDevice),
           client: linkClient,
           keys: options.keys,
@@ -174,6 +188,20 @@ Future<Investigation> investigate(
           onChange: () => onStep?.call(List.of(log)));
       report = deep.report;
       linkFindings.addAll(deep.findings);
+    }
+    // What the website is for (gambling, "guaranteed returns"...) and how
+    // the internet sees it. Offline or in quick mode, from the address only.
+    final target = Uri.tryParse(report.finalUrl);
+    if (target != null && target.host.isNotEmpty && !target.host.contains(' ')) {
+      final site = await checker.check(target,
+          page: deep?.page,
+          ageDays: a.report.domainAgeDays,
+          listings: deep?.hits,
+          network: options.network && !options.quick,
+          log: (tool, action, {sentOffDevice = false}) => step(tool, action, sentOffDevice: sentOffDevice),
+          onChange: () => onStep?.call(List.of(log)));
+      sites.add(site);
+      linkFindings.addAll(siteFindings(site));
     }
     // Point link findings at the link's position in the text.
     final pos = text.indexOf(u);
@@ -209,8 +237,8 @@ Future<Investigation> investigate(
   findings.addAll(attribution.findings);
   onStep?.call(List.of(log));
 
-  // 3c. Wait for the web reports.
-  final web = await webFuture;
+  // 3c. Wait for the web reports (and add those found for the websites).
+  final web = [...await webFuture, for (final s in sites) ?s.web];
   findings.addAll(webIntelFindings(web));
   onStep?.call(List.of(log));
 
@@ -280,12 +308,13 @@ Future<Investigation> investigate(
 
   // 5. Score.
   final scoreStep = step('Risk scorer', 'Combining all evidence');
-  final verdict = _verdict(findings, reports, ai, log, entities, extras, web);
+  final verdict = _verdict(findings, reports, ai, log, entities, extras, web, sites);
   done(scoreStep, '${verdict.score}/100, ${verdictLabel(verdict.level, findings)} (confidence ${verdict.confidence}%)');
 
   final inv = Investigation(
       artefact: artefact, findings: findings, log: log, verdict: verdict, urls: reports, script: textForensics.script, attribution: attribution);
   attachWebIntel(inv, web);
+  attachSites(inv, sites);
   return inv;
 }
 
@@ -303,7 +332,7 @@ String _entityName(EntityType t) => switch (t) {
     };
 
 Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai, List<LogStep> log, List<Entity> entities,
-    [IntakeExtras? extras, List<WebIntelResult> web = const []]) {
+    [IntakeExtras? extras, List<WebIntelResult> web = const [], List<SiteReport> sites = const []]) {
   // Each category counts once at full weight so a long message can't pile up
   // points by repeating the same word.
   final byCat = <CueCategory, int>{};
@@ -336,8 +365,16 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
   final floor = webIntelFloor(web);
   if (floor == RiskLevel.danger && score < 65) score = 65;
   if (floor == RiskLevel.suspicious && score < 40) score = 40;
+  // So does what a linked website is for: an online gambling site is
+  // illegal in Malaysia whatever else the message says.
+  final sf = siteFloor(sites);
+  if (sf == RiskLevel.danger && score < 65) score = 65;
+  if (sf == RiskLevel.suspicious && score < 40) score = 40;
+  if (sf == RiskLevel.caution && score < 18) score = 18;
   final level = levelFor(score);
   final reported = web.where((r) => r.reported).toList();
+  final riskySite = ([...sites.where((s) => s.purpose.risky)]..sort((a, b) => b.purpose.level.index - a.purpose.level.index)).firstOrNull;
+  final sitePurpose = riskySite != null && riskySite.purpose.level.index >= RiskLevel.suspicious.index ? riskySite.purpose : null;
 
   // Web sub-steps (one search engine refusing) are not failed checks; the
   // overall web step is.
@@ -351,6 +388,9 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
       extras?.scamType ??
       (level == RiskLevel.safe && legitimateHeadline(f) != null ? 'Legitimate message' : _guessType(byCat, urls, legit < 0));
   if (scamType.isEmpty) scamType = 'Unclear';
+  if (sitePurpose != null && const {'Unclear', 'Legitimate message', 'Suspicious message', 'Prize scam'}.contains(scamType)) {
+    scamType = scamTypeFor(sitePurpose);
+  }
   if (reported.isNotEmpty && const {'Unclear', 'Legitimate message', 'Suspicious message'}.contains(scamType)) {
     scamType = reported.expand((r) => r.scamTypes).firstOrNull ?? 'Reported scam ${reported.first.identifier.kindLabel}';
   }
@@ -359,6 +399,8 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
       ? '${reported.first.identifier.display} has been reported online as a scam on '
           '${reported.first.confirmedDomains.length} public site${reported.first.confirmedDomains.length == 1 ? '' : 's'} '
           '(${reported.first.confirmedDomains.take(3).join(', ')}).'
+      : sitePurpose != null && sitePurpose.level == RiskLevel.danger
+      ? '${riskySite!.domain}: ${sitePurpose.headline}. ${sitePurpose.explanation}'
       : (ai?['summary'] as String?)?.trim().isNotEmpty == true
       ? ai!['summary'] as String
       : switch (level) {
@@ -369,6 +411,8 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
         };
   final next = extras?.nextStep != null && level.index >= RiskLevel.suspicious.index
       ? extras!.nextStep!
+      : sitePurpose != null && (ai == null || sitePurpose.level == RiskLevel.danger)
+      ? sitePurpose.nextStep
       : reported.isNotEmpty && ai == null
       ? "Don't reply, call back or send money. Block this ${reported.first.identifier.kindLabel}. If you already paid, call 997 (National Scam Response Centre) at once."
       : (ai?['safe_next_step'] as String?)?.trim().isNotEmpty == true

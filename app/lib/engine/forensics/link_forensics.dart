@@ -15,7 +15,12 @@ import 'urlscan.dart';
 class LinkForensics {
   final UrlReport report;
   final List<Finding> findings;
-  const LinkForensics(this.report, this.findings);
+
+  /// The landing page as the isolated reader got it (null when not read),
+  /// and the reputation services that listed the link, for the site check.
+  final PageFetch? page;
+  final List<ReputationHit> hits;
+  const LinkForensics(this.report, this.findings, {this.page, this.hits = const []});
 }
 
 const _visionSystem = '''
@@ -113,6 +118,7 @@ Future<LinkForensics> deepLinkCheck(
 
   // 3 and 4. Landing page in the isolated reader, then the cloaking check.
   LandingReport? landing;
+  PageFetch? landed;
   bool? cloaked;
   final extraHops = <UrlHop>[];
   Future<void> landingPart() async {
@@ -126,6 +132,7 @@ Future<LinkForensics> deepLinkCheck(
     PageFetch? mobile;
     try {
       mobile = await fetchIsolated(finalUri, client: client);
+      landed = mobile;
       if (!mobile.isHtml) {
         s
           ..result = '$isolationNote. The link gives a file (${mobile.contentType ?? 'unknown type'}), not a web page; it was not downloaded.'
@@ -145,6 +152,7 @@ Future<LinkForensics> deepLinkCheck(
             final next = await fetchIsolated(hidden, client: client);
             extraHops[extraHops.length - 1] = UrlHop(hidden.toString(), next.status, via: landing!.hiddenRedirectKind);
             if (next.isHtml) {
+              landed = next;
               final l2 = analyzeLandingHtml(next.html!, next.finalUrl);
               findings.addAll(landing!.findings);
               landing = l2;
@@ -336,7 +344,7 @@ Future<LinkForensics> deepLinkCheck(
     add(CueCategory.impersonation, 'Pretends to be $imitates',
         'The page at ${finalUri.host} imitates $imitates but is not one of its official websites.', 16, 'Landing-page check');
   }
-  return LinkForensics(report, findings);
+  return LinkForensics(report, findings, page: landed, hits: reputation);
 }
 
 /// A finding from the vision model's answer, or null when it saw nothing.
