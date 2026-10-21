@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../engine/investigator.dart' show verdictLabel;
 import '../engine/models.dart';
+import '../engine/webintel/web_intel.dart' show webIntelOf;
 import '../engine/redaction.dart';
 import '../state.dart';
 import 'check/check_format.dart';
@@ -17,6 +19,7 @@ import 'report_page.dart';
 import 'review_page.dart';
 import 'theme.dart';
 import 'warning_image.dart';
+import 'webintel/web_evidence.dart';
 import 'who_behind.dart';
 
 /// The full result of one check: verdict, why, the scam script, where links
@@ -33,11 +36,14 @@ class ResultView extends StatelessWidget {
     final v = inv.verdict;
     final safe = v.level == RiskLevel.safe;
     final risky = v.level.index >= RiskLevel.suspicious.index;
+    final web = webIntelOf(inv);
     final parts = <Widget>[
-      VerdictCard(verdict: v),
+      VerdictCard(verdict: v, label: verdictLabel(v.level, inv.findings)),
       if (risky) _HelpRow(inv: inv),
       if (inlineActions) ResultActionBar(inv: inv),
+      if (web.any((r) => r.reported)) WebEvidenceSection(results: web),
       _WhySection(inv: inv),
+      if (web.isNotEmpty && !web.any((r) => r.reported)) WebEvidenceSection(results: web),
       if (safe) _FeedbackCard(inv: inv, calm: true),
       if (inv.script != null) ScriptStepper(inv.script!),
       for (final u in inv.urls) _LinkChain(u),
@@ -102,7 +108,9 @@ class ResultView extends StatelessWidget {
 /// thing to do now.
 class VerdictCard extends StatelessWidget {
   final Verdict verdict;
-  const VerdictCard({super.key, required this.verdict});
+  /// Overrides the level's name, e.g. "No warning signs found yet".
+  final String? label;
+  const VerdictCard({super.key, required this.verdict, this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -157,7 +165,7 @@ class VerdictCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      riskLabel(verdict.level),
+                      label ?? riskLabel(verdict.level),
                       style: t.headlineSmall?.copyWith(color: fg, fontWeight: FontWeight.w800, fontSize: 24),
                     ),
                     Text(
@@ -406,6 +414,8 @@ class _WhySection extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final safe = inv.verdict.level == RiskLevel.safe;
+    // "Genuine" only when there is a real sign of it, not just no warnings.
+    final genuine = safe && inv.findings.any((f) => !f.isRisk);
     final risks = inv.findings.where((f) => f.isRisk).toList()..sort((a, b) => b.weight.compareTo(a.weight));
     final legit = inv.findings.where((f) => !f.isRisk).toList()..sort((a, b) => a.weight.compareTo(b.weight));
     // One entry per cue type keeps the list short; the strongest example wins.
@@ -417,9 +427,9 @@ class _WhySection extends StatelessWidget {
     final detail = sourceDetail(inv);
     final c = riskColor(inv.verdict.level);
     return ResultSection(
-      icon: safe ? Icons.verified_outlined : Icons.policy_outlined,
-      color: safe ? K.green : K.primary,
-      title: safe ? 'Why Kantoi thinks it is genuine' : 'Why Kantoi flagged this',
+      icon: genuine ? Icons.verified_outlined : Icons.policy_outlined,
+      color: genuine ? K.green : K.primary,
+      title: genuine ? 'Why Kantoi thinks it is genuine' : safe ? 'What Kantoi found' : 'Why Kantoi flagged this',
       trailing: safe || topRisks.isEmpty ? null : Pill('${topRisks.length} red flag${topRisks.length == 1 ? '' : 's'}', color: K.red),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -444,7 +454,7 @@ class _WhySection extends StatelessWidget {
                     ),
                     Icon(riskIcon(inv.verdict.level), size: 14, color: c),
                     const SizedBox(width: 4),
-                    Text(riskLabel(inv.verdict.level), style: t.labelMedium?.copyWith(color: c)),
+                    Text(verdictLabel(inv.verdict.level, inv.findings), style: t.labelMedium?.copyWith(color: c)),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -454,7 +464,7 @@ class _WhySection extends StatelessWidget {
           ),
           if (main.isEmpty && other.isEmpty) ...[
             const SizedBox(height: 12),
-            Text('Kantoi found no clear warning signs and no clear signs it is genuine.', style: t.bodyMedium),
+            Text("Kantoi found no warning signs yet and no clear signs it is genuine. That does not prove it's safe.", style: t.bodyMedium),
           ],
           for (final (i, f) in main.indexed) ...[const SizedBox(height: 10), CueTile(f, number: i + 1)],
           if (other.isNotEmpty) ...[

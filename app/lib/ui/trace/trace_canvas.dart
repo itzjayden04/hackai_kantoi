@@ -22,6 +22,7 @@ Color traceColor(TraceKind k) => switch (k) {
       TraceKind.email => const Color(0xFFF472B6),
       TraceKind.brand => const Color(0xFFF87171),
       TraceKind.related => const Color(0xFFFF6B6B),
+      TraceKind.webReport => const Color(0xFFE11D48),
     };
 
 IconData traceIcon(TraceKind k) => switch (k) {
@@ -41,6 +42,7 @@ IconData traceIcon(TraceKind k) => switch (k) {
       TraceKind.email => Icons.alternate_email_rounded,
       TraceKind.brand => Icons.theater_comedy_outlined,
       TraceKind.related => Icons.folder_shared_outlined,
+      TraceKind.webReport => Icons.travel_explore_rounded,
     };
 
 /// The live investigation map: nodes pop in as lookups find them, a gentle

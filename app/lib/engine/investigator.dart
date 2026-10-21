@@ -15,6 +15,7 @@ import 'models.dart';
 import 'redaction.dart';
 import 'relationship.dart' show squash, levelFor;
 import 'url_analyzer.dart';
+import 'webintel/web_intel.dart';
 
 const _system = '''
 You are Kantoi, a scam investigator helping ordinary people in Malaysia.
@@ -44,6 +45,11 @@ class InvestigateOptions {
   final bool quick;
   /// For tests: the HTTP client every online link check uses.
   final http.Client? httpClient;
+  /// Searches the public web for reports about numbers, accounts and emails
+  /// in the item (needs [network]; skipped in [quick] mode).
+  final bool webLookup;
+  /// For tests: where web results are kept (defaults to the shared 24 h cache).
+  final WebIntelCache? webCache;
   const InvestigateOptions({
     this.llm = LlmConfig.defaults,
     this.network = true,
@@ -51,6 +57,8 @@ class InvestigateOptions {
     this.keys = ForensicKeys.defaults,
     this.quick = false,
     this.httpClient,
+    this.webLookup = true,
+    this.webCache,
   });
 }
 
@@ -104,6 +112,31 @@ Future<Investigation> investigate(
       languages: languages,
       meta: extras?.meta ?? const {},
       situation: extras?.situation);
+
+  // 1b. Web reports for numbers, accounts and emails. Runs online alongside
+  // the other checks and is awaited before the AI and the score.
+  final webIds = webIdentifiersIn(text);
+  final own = webIds.where((id) => id.isOwn(options.ownDetails)).toList();
+  final toSearch = webIds.where((id) => !own.contains(id)).toList();
+  for (final id in own) {
+    done(step(webTool, 'Web search for ${id.kindLabel}s in the item'), 'Skipped: this is your own ${id.kindLabel}, it is never searched',
+        StepStatus.skipped);
+  }
+  Future<List<WebIntelResult>> webFuture = Future.value(const <WebIntelResult>[]);
+  if (toSearch.isNotEmpty) {
+    if (!options.webLookup || options.quick || !options.network) {
+      final s = step(webTool, 'Searching the public web for reports about ${toSearch.map((i) => i.display).join(', ')}');
+      done(s, !options.network ? 'Offline: online checks are off, web search not run' : 'Skipped in quick mode', StepStatus.skipped);
+    } else {
+      final client = options.httpClient ?? http.Client();
+      final web = WebIntel(client: client, llm: options.llm, cache: options.webCache);
+      webFuture = Future.wait(toSearch.map((id) => web.lookup(id,
+          log: (tool, action, {sentOffDevice = false}) => step(tool, action, sentOffDevice: sentOffDevice),
+          onChange: () => onStep?.call(List.of(log))))).whenComplete(() {
+        if (options.httpClient == null) client.close();
+      });
+    }
+  }
 
   // 2. Text cues (on the device).
   final cueStep = step('Cue detector', 'Checking the wording for pressure tactics');
@@ -176,6 +209,11 @@ Future<Investigation> investigate(
   findings.addAll(attribution.findings);
   onStep?.call(List.of(log));
 
+  // 3c. Wait for the web reports.
+  final web = await webFuture;
+  findings.addAll(webIntelFindings(web));
+  onStep?.call(List.of(log));
+
   // 4. AI analyst, on a redacted copy.
   Map<String, dynamic>? ai;
   if (options.llm.usable) {
@@ -242,11 +280,19 @@ Future<Investigation> investigate(
 
   // 5. Score.
   final scoreStep = step('Risk scorer', 'Combining all evidence');
-  final verdict = _verdict(findings, reports, ai, log, entities, extras);
-  done(scoreStep, '${verdict.score}/100, ${riskLabel(verdict.level)} (confidence ${verdict.confidence}%)');
+  final verdict = _verdict(findings, reports, ai, log, entities, extras, web);
+  done(scoreStep, '${verdict.score}/100, ${verdictLabel(verdict.level, findings)} (confidence ${verdict.confidence}%)');
 
-  return Investigation(artefact: artefact, findings: findings, log: log, verdict: verdict, urls: reports, script: textForensics.script, attribution: attribution);
+  final inv = Investigation(
+      artefact: artefact, findings: findings, log: log, verdict: verdict, urls: reports, script: textForensics.script, attribution: attribution);
+  attachWebIntel(inv, web);
+  return inv;
 }
+
+/// The verdict label. A low score with no sign that the item is genuine is
+/// "No warning signs found yet", never "safe".
+String verdictLabel(RiskLevel level, List<Finding> findings) =>
+    level == RiskLevel.safe && !findings.any((f) => !f.isRisk) ? 'No warning signs found yet' : riskLabel(level);
 
 String _entityName(EntityType t) => switch (t) {
       EntityType.phone => 'phone number(s)',
@@ -257,7 +303,7 @@ String _entityName(EntityType t) => switch (t) {
     };
 
 Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai, List<LogStep> log, List<Entity> entities,
-    [IntakeExtras? extras]) {
+    [IntakeExtras? extras, List<WebIntelResult> web = const []]) {
   // Each category counts once at full weight so a long message can't pile up
   // points by repeating the same word.
   final byCat = <CueCategory, int>{};
@@ -286,9 +332,16 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
   var score = squash(raw.clamp(0, 999));
   // Genuine messages never address AI checkers, so this alone is decisive.
   if (has(CueCategory.aiManipulation)) score = score < 85 ? 85 : score;
+  // Pages on the web that report this number or account set a floor.
+  final floor = webIntelFloor(web);
+  if (floor == RiskLevel.danger && score < 65) score = 65;
+  if (floor == RiskLevel.suspicious && score < 40) score = 40;
   final level = levelFor(score);
+  final reported = web.where((r) => r.reported).toList();
 
-  final failed = log.where((s) => s.status == StepStatus.failed).length;
+  // Web sub-steps (one search engine refusing) are not failed checks; the
+  // overall web step is.
+  final failed = log.where((s) => s.status == StepStatus.failed && !s.tool.startsWith('$webTool:')).length;
   final evidence = byCat.length + (legit < 0 ? 1 : 0);
   var confidence = 50 + evidence * 7 + (ai != null ? 8 : 0) - failed * 6;
   if (score > 85 || score < 8) confidence += 8;
@@ -296,22 +349,31 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
 
   String scamType = (ai?['scam_type'] as String?)?.trim() ??
       extras?.scamType ??
-      (level == RiskLevel.safe && legitimateHeadline(f) != null ? 'Legitimate message' : _guessType(byCat, urls));
+      (level == RiskLevel.safe && legitimateHeadline(f) != null ? 'Legitimate message' : _guessType(byCat, urls, legit < 0));
   if (scamType.isEmpty) scamType = 'Unclear';
+  if (reported.isNotEmpty && const {'Unclear', 'Legitimate message', 'Suspicious message'}.contains(scamType)) {
+    scamType = reported.expand((r) => r.scamTypes).firstOrNull ?? 'Reported scam ${reported.first.identifier.kindLabel}';
+  }
   final top = f.where((x) => x.isRisk).toList()..sort((a, b) => b.weight.compareTo(a.weight));
-  final headline = (ai?['summary'] as String?)?.trim().isNotEmpty == true
+  final headline = reported.isNotEmpty
+      ? '${reported.first.identifier.display} has been reported online as a scam on '
+          '${reported.first.confirmedDomains.length} public site${reported.first.confirmedDomains.length == 1 ? '' : 's'} '
+          '(${reported.first.confirmedDomains.take(3).join(', ')}).'
+      : (ai?['summary'] as String?)?.trim().isNotEmpty == true
       ? ai!['summary'] as String
       : switch (level) {
           RiskLevel.danger => 'This looks like a $scamType. ${_sentence(top.map((x) => x.title).toSet().take(2).toList())}.',
           RiskLevel.suspicious => 'This has several warning signs: ${top.take(3).map((x) => x.title.toLowerCase()).join(', ')}.',
           RiskLevel.caution => 'Mostly fine, but check this: ${top.isEmpty ? 'nothing major' : top.first.title.toLowerCase()}.',
-          RiskLevel.safe => legitimateHeadline(f) ?? 'No warning signs found.',
+          RiskLevel.safe => legitimateHeadline(f) ?? "No warning signs found yet. That does not prove it's safe.",
         };
   final next = extras?.nextStep != null && level.index >= RiskLevel.suspicious.index
       ? extras!.nextStep!
+      : reported.isNotEmpty && ai == null
+      ? "Don't reply, call back or send money. Block this ${reported.first.identifier.kindLabel}. If you already paid, call 997 (National Scam Response Centre) at once."
       : (ai?['safe_next_step'] as String?)?.trim().isNotEmpty == true
       ? ai!['safe_next_step'] as String
-      : _defaultNext(level, byCat, urls);
+      : _defaultNext(level, byCat, urls, legit < 0);
 
   final change = <String>[
     ...((ai?['what_would_change'] as List?)?.map((e) => e.toString()) ?? const <String>[]),
@@ -321,7 +383,11 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
   final notChecked = <String>[
     if (ai == null) 'No AI explanation (built-in checks only)',
     if (failed > 0) '$failed online check(s) could not run',
-    if (urls.isEmpty && entities.isEmpty) 'Nothing to look up online',
+    if (urls.isEmpty && entities.isEmpty && web.isEmpty) 'Nothing to look up online',
+    if (web.isNotEmpty && web.every((r) => r.status == WebStatus.noReports))
+      "No public scam reports found online (this does not prove it's safe)",
+    if (web.isNotEmpty && web.every((r) => r.status == WebStatus.unavailable))
+      web.any((r) => r.offline) ? 'Web search for public reports could not run (offline)' : 'Web search for public reports could not run',
     if (extras == null || !extras.isFile) 'Voice, video and attachments are not analysed',
   ];
   return Verdict(
@@ -342,7 +408,7 @@ String _sentence(List<String> parts) {
   return [parts.first, ...rest].join(', and ');
 }
 
-String _guessType(Map<CueCategory, int> c, List<UrlReport> urls) {
+String _guessType(Map<CueCategory, int> c, List<UrlReport> urls, [bool genuine = true]) {
   final imit = urls.map((u) => u.imitates).whereType<String>().firstOrNull;
   if (c.containsKey(CueCategory.impersonation) && imit != null) return '$imit phishing';
   if (c.containsKey(CueCategory.authority) && c.containsKey(CueCategory.fear)) return 'Fake officer (Macau) scam';
@@ -351,12 +417,16 @@ String _guessType(Map<CueCategory, int> c, List<UrlReport> urls) {
   if (c.containsKey(CueCategory.credentials)) return 'Account phishing';
   if (c.containsKey(CueCategory.file)) return 'Dangerous file or app';
   if (c.containsKey(CueCategory.reward)) return 'Prize scam';
-  if (c.isEmpty) return 'Legitimate message';
+  if (c.isEmpty) return genuine ? 'Legitimate message' : 'Unclear';
   return 'Suspicious message';
 }
 
-String _defaultNext(RiskLevel level, Map<CueCategory, int> c, List<UrlReport> urls) {
-  if (level == RiskLevel.safe) return 'No action needed. If anything changes, check again.';
+String _defaultNext(RiskLevel level, Map<CueCategory, int> c, List<UrlReport> urls, [bool genuine = false]) {
+  if (level == RiskLevel.safe) {
+    return genuine
+        ? 'No action needed. If anything changes, check again.'
+        : "Nothing alarming so far. Still, never share OTPs or send money until you've checked who it is.";
+  }
   final imit = urls.map((u) => u.imitates).whereType<String>().firstOrNull;
   if (imit != null) return "Don't open the link. Open the official $imit app or website yourself to check.";
   if (c.containsKey(CueCategory.file)) return "Don't open or install this file. Delete it, and check with the sender on a number you already know.";

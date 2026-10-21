@@ -1,0 +1,37 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [
+          {
+            "text": "```json\n{\"reported_as_scam\": \"yes\", \"scam_types\": [\"Fake officer (Macau) scam\"], \"independent_sources\": 5, \"summary\": \"Several people report calls from 012-345 6789 pretending to be police and asking for transfers.\", \"sources\": [{\"title\": \"Invented page\", \"url\": \"https://invented-by-model.example/report\"}, {\"title\": \"forum.example.com\", \"url\": \"https://forum.example.com/made-up-path\"}]}\n```"
+          }
+        ]
+      },
+      "finishReason": "STOP",
+      "groundingMetadata": {
+        "webSearchQueries": ["\"012-3456789\" scam", "\"0123456789\" penipuan"],
+        "searchEntryPoint": {"renderedContent": "<div>...</div>"},
+        "groundingChunks": [
+          {"web": {"uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AAA111", "title": "forum.example.com"}},
+          {"web": {"uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/BBB222", "title": "scamreports.example.my"}},
+          {"web": {"uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/CCC333", "title": "news.example.com"}}
+        ],
+        "groundingSupports": [
+          {
+            "segment": {"startIndex": 0, "endIndex": 92, "text": "Several people report calls from 012-345 6789 pretending to be police; it is a Macau scam."},
+            "groundingChunkIndices": [0, 1],
+            "confidenceScores": [0.91, 0.84]
+          },
+          {
+            "segment": {"startIndex": 93, "endIndex": 140, "text": "Police published general advice on phone calls."},
+            "groundingChunkIndices": [2],
+            "confidenceScores": [0.5]
+          }
+        ]
+      }
+    }
+  ],
+  "usageMetadata": {"promptTokenCount": 120, "candidatesTokenCount": 80, "totalTokenCount": 200}
+}

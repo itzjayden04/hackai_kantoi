@@ -377,6 +377,17 @@ class TraceNodeDetails extends StatelessWidget {
             Expanded(child: SelectableText(v, style: t.bodyMedium)),
           ]),
         ),
+      if (n.kind == TraceKind.webReport)
+        if (n.facts.where((f) => f.$1 == 'Link').firstOrNull case (_, final link)) ...[
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () => launchUrl(Uri.parse(link), mode: LaunchMode.externalApplication),
+            icon: const Icon(Icons.open_in_new_rounded),
+            label: const Text('Open the source page'),
+          ),
+          const SizedBox(height: 4),
+          Text('Opens in your browser. Kantoi only shows pages a search actually returned.', style: t.bodySmall),
+        ],
       if (flags.isNotEmpty) ...[
         const SectionTitle('Signs'),
         for (final f in flags)
