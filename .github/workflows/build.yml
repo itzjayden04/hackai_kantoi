@@ -6,6 +6,9 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+  # Publishing a release on GitHub builds the APK and attaches it.
+  release:
+    types: [published]
 
 permissions:
   contents: write
