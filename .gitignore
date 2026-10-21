@@ -3,3 +3,10 @@
 .idea/
 .vscode/
 .claude/
+
+# Desktop and web platforms are not used (Android only)
+app/linux/
+app/windows/
+app/macos/
+app/web/
+app/ios/

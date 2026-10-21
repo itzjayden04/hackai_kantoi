@@ -4,16 +4,54 @@
 
 Built for HackAI 2026, Track 3: Scam Defence & Awareness.
 
+## Before you install
+
+**Requirements**
+
+| | |
+| --- | --- |
+| Phone | Android 7.0 or newer (Android 10+ recommended; call screening needs Android 10+) |
+| Tested on | Honor (Android, MagicOS) |
+| Internet | Optional. Built-in checks work offline; AI, web search and Trace lookups need data or Wi-Fi |
+| Account or API key | None |
+
+> [!IMPORTANT]
+> **Disclaimer: Android only, installed outside the Play Store.**
+> - Kantoi is a hackathon prototype distributed as an APK file. It does not run on iPhone, iPad, Windows or Mac.
+> - Install it with your phone brand's own installer or app store, for example **Xiaomi / Redmi / POCO, vivo / iQOO, Honor, OPPO / realme / OnePlus** (Honor users can also get it through the Honor App Market). These installers let you open the APK directly.
+> - Phones that rely only on **Google's package installer with Google Play Protect** (such as Google Pixel, and some Samsung and Android One phones) may warn about or block an app that asks for Accessibility and notification access when it is not from the Play Store. On those phones installation may not be possible.
+> - After installing, Android treats Kantoi as a "restricted" app. You must **allow restricted settings** before you can turn on Accessibility and notification access (steps below).
+> - Kantoi reads your notifications and the screen you have open **only to detect scams**. Messages are checked on the phone. When AI or web search is used, names, phone numbers, IC numbers and account numbers are masked first. Nothing is uploaded without a cloud icon showing it in the activity log.
+> - Kantoi's verdicts are an aid, not a guarantee. It can miss a scam or flag a genuine message. If money is at stake, call the person or company on a number you already know, and call **NSRC 997** if you have already paid.
+
 ## Download
 
-Download `Kantoi-android.apk` from [Releases](https://github.com/itzjayden04/hackai_kantoi/releases/latest) (or the latest build under Actions). That is the only thing to install: AI is built in, and no account or API key is needed.
+Download `Kantoi-android.apk` from [Releases](https://github.com/itzjayden04/hackai_kantoi/releases/latest). That is the only thing to install: AI is built in.
 
-### Install on Android
+## Install on Android
 
-1. Open the downloaded `Kantoi-android.apk` on the phone. Allow "Install unknown apps" for your browser when asked, then tap **Install**.
-2. Google Play Protect may warn that the app is unknown. Tap **More details**, then **Install anyway**. Kantoi is not on the Play Store because it is a hackathon prototype.
-3. Open Kantoi. Setup walks you through each permission in order: warnings, reading new messages, showing warnings on top, Accessibility, call screening, photos and battery. Tap **Allow** on each card and follow Android's screens.
-4. If Android says a setting is restricted, tap **Allow restricted settings** in Kantoi's Accessibility step (or open **Settings > Apps > Kantoi**, tap the three dots, choose **Allow restricted settings**) and try again.
+1. **Download** `Kantoi-android.apk` on the phone and open it from the notification or the Files / File Manager app.
+2. **Allow unknown apps.** If asked, allow your browser or file manager to "Install unknown apps", then tap **Install**. (If a security scan appears, tap **Install anyway** / **Continue installation**.)
+3. **Allow restricted settings.** Android blocks Accessibility and notification access for apps installed this way until you allow it:
+   - Open **Settings > Apps** (called **Manage apps** or **App management** on Xiaomi, OPPO, vivo and Honor) **> Kantoi**.
+   - Tap the **three dots (⋮)** at the top right and choose **Allow restricted settings**, then confirm with your PIN or fingerprint.
+   - If you don't see the three dots yet, first try turning on Kantoi under Accessibility once (it will say "Restricted setting"), then come back here.
+   - Kantoi's setup has an **Allow restricted settings** button that opens this page for you.
+4. **Open Kantoi and follow setup.** It walks you through each permission in order. Tap **Allow** on each card and follow Android's screens:
+   - **Notifications**: so Kantoi can warn you.
+   - **Notification access**: reads new WhatsApp, Telegram, SMS and email messages.
+   - **Display over other apps**: shows the pause card, call warning and blocked-site screen.
+   - **Accessibility** (Installed / Downloaded apps > Kantoi > On): reads the open chat or website so Kantoi can warn you and close scam pages.
+   - **Caller ID & spam app**: lets Kantoi warn about risky callers.
+   - **Photos**: checks QR codes in new screenshots.
+   - **Battery**: choose **Don't optimise** / **Unrestricted**.
+5. **Keep Kantoi running (Xiaomi, OPPO, vivo, Honor, Huawei).** These phones close background apps aggressively. Also:
+   - Turn on **Autostart** for Kantoi (Settings > Apps > Kantoi > Autostart, or in the Security / Phone Manager app).
+   - Set battery to **No restrictions** / **Allow background activity**.
+   - Lock Kantoi in the recent-apps screen (swipe down on its card or tap the lock icon).
+6. **Check it works.** The top bar shows a green **Protected** pill. Tap it to open the Protection centre and preview each warning.
+
+If something stops working after an update or restart, open Kantoi once: the pill turns amber and shows which permission needs turning back on.
 
 ## What it does
 
@@ -34,7 +72,7 @@ Kantoi follows the eight branches of the product blueprint.
    - **Files and apps:** risky app permissions, macros and links inside documents, and forged letterheads are flagged.
    - **Genuine messages:** an official-sender list and known-good templates let a real message come out as "Looks legitimate".
 3. **Relationship check.** It runs by itself when you open a chat (see the chat badge above). You can also score a WhatsApp or Telegram chat export, or answer 9 questions instead. The score looks at how you met, how fast money came up, texting rhythm, story contradictions and copy-paste replies. It also spots a hijacked friend's account, and shows a risk timeline with the key messages highlighted.
-4. **Who's behind it.** The Trace tab starts a live investigation from any link, number, account, email or whole message. The map grows as each real lookup returns: redirects, domain registration, DNS, hosting company and country, certificates and certificate logs, look-alike brands and links to earlier cases. Every lookup appears in a timestamped log, and the findings export as a police PDF. Kantoi also keeps a scam map on your device. It draws on certificate logs, public phishing feeds, domain records, news and approved reports. Shared nameservers, accounts, numbers and message scripts link items into campaigns, which you can explore as a network. "Before you pay" checks an account or number against the map and Semak Mule. Campaigns are named; people never are.
+4. **Who's behind it.** The Trace tab starts a live investigation from any link, number, account, email or whole message. The map grows as each real lookup returns: redirects, domain registration, DNS, hosting company and country, certificates and certificate logs, look-alike brands and links to earlier cases. Every lookup appears in a timestamped log, and the findings export as a police PDF. Kantoi also keeps a scam map on your device. It draws on certificate logs, public phishing feeds, domain records, news and approved reports. Shared nameservers, accounts, numbers and message scripts link items into campaigns, which you can explore as a network. Tracing a number or account also searches the web for public scam reports and links to Semak Mule. Campaigns are named; people never are.
 5. **Explain it.** You get the answer, the reasons highlighted in the message and the full evidence, with an honest confidence level and what would change the verdict. Buttons say "This was actually legit" or "This was actually a scam", and an "Honest limits" page shows measured accuracy (see [docs/evaluation.md](docs/evaluation.md)).
 6. **Act on it.**
    - **Emergency tab:** a "Call 997" button, the call script, a "what to do right now" checklist that remembers what you have done, and verified bank fraud hotlines.
@@ -70,7 +108,7 @@ The app works without these. Each one switches on one extra online check. Add th
 
 The presenter's Android phone runs Kantoi with setup finished (mirror it to the projector). A teammate plays the scammer from their own WhatsApp.
 
-1. **A real message stays safe (30 s).** In Check, tap the sample *Bank TAC (genuine)*. Watch the live stages run; it is rated *Looks safe* with the reasons it is fine. Say: false positives are handled by rules that recognise legitimate messages, and every result has "Was this wrong?".
+1. **A real message stays safe (30 s).** In Check, tap the sample *Real bank TAC*. Watch the live stages run; it is rated *Looks safe* with the reasons it is fine. Say: false positives are handled by rules that recognise legitimate messages, and every result has "Was this wrong?".
 2. **A stranger says hello (45 s).** The scammer sends: *"Hi, is this Mr Tan? Sorry, wrong number 😅 You seem nice though, can we be friends?"* Open the chat: the Kantoi badge appears and shows "Started with a 'wrong number' message".
 3. **The script escalates (60 s).** The scammer sends: *"My uncle is a crypto trader. Guaranteed 30% profit every week, I already earned RM20k. Dear, you should try, transfer RM5000 to this account 5123456789012 Maybank today only."* A scam-warning notification and the pause card appear, and the badge turns red.
 4. **Who's behind it (60 s).** Tap the notification: the Trace opens and builds the map live. Then send a scam link and tap it in WhatsApp: Kantoi closes the page.

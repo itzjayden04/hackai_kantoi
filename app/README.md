@@ -1,17 +1,16 @@
-# kantoi
+# Kantoi app (Flutter, Android)
 
-A new Flutter project.
+Source of the Kantoi Android app. See the [main README](../README.md) for what it does, how to install it and the demo script.
 
-## Getting Started
+```sh
+flutter pub get
+flutter analyze
+flutter test
+flutter build apk --release --dart-define=GEMINI_API_KEY=...
+```
 
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- `lib/engine/` scam checks, link forensics, web search, trace and reports
+- `lib/intake/` reading messages, screenshots, files, QR codes and chat exports
+- `lib/guard/` phone protection (notification, accessibility, call, site, app and picture guards)
+- `lib/ui/` screens; design tokens in `lib/ui/theme.dart`, shared widgets in `lib/ui/kit.dart`
+- `android/app/src/main/kotlin/` native services for phone protection
