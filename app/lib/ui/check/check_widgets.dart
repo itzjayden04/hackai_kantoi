@@ -109,8 +109,10 @@ class _ProtectionStatusCardState extends State<ProtectionStatusCard> with Widget
   }
 }
 
-String shortRisk(RiskLevel l) => switch (l) {
-  RiskLevel.safe => 'Safe',
+/// Short pill label. "Safe" only when Kantoi saw signs the item is genuine;
+/// otherwise "No signs", because finding nothing doesn't prove it's safe.
+String shortRisk(RiskLevel l, [List<Finding> findings = const []]) => switch (l) {
+  RiskLevel.safe => findings.any((f) => !f.isRisk) ? 'Safe' : 'No signs',
   RiskLevel.caution => 'Careful',
   RiskLevel.suspicious => 'Suspicious',
   RiskLevel.danger => 'Scam',
@@ -146,7 +148,7 @@ class RecentCheckCard extends StatelessWidget {
                 child: Text(v.scamType, style: t.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
               ),
               const SizedBox(width: 8),
-              Pill(shortRisk(v.level), color: c),
+              Pill(shortRisk(v.level, inv.findings), color: c),
             ],
           ),
           const SizedBox(height: 6),
