@@ -26,7 +26,18 @@ Built for HackAI 2026, Track 3: Scam Defence & Awareness.
 
 ## Download
 
-Download `Kantoi-android.apk` from [Releases](https://github.com/itzjayden04/hackai_kantoi/releases/latest). That is the only thing to install: AI is built in.
+Kantoi is a single file, `Kantoi-android.apk`. AI is built in, so there is nothing else to install.
+
+**Direct download link (open it on the phone):**
+**https://github.com/itzjayden04/hackai_kantoi/releases/latest/download/Kantoi-android.apk**
+
+Or from the release page, step by step:
+
+1. On the Android phone, open Chrome (or your phone's browser) and go to **https://github.com/itzjayden04/hackai_kantoi/releases/latest**.
+2. Scroll down to **Assets** (tap **Assets** to expand it if the list is closed).
+3. Tap **Kantoi-android.apk**. Do not tap "Source code (zip)" or "Source code (tar.gz)"; those are the code, not the app.
+4. If the browser warns "This type of file can harm your device", tap **Download anyway**.
+5. When the download finishes, tap **Open** in the notification, or open **Files / File Manager > Downloads > Kantoi-android.apk**. Then follow the install steps below.
 
 ## Install on Android
 
