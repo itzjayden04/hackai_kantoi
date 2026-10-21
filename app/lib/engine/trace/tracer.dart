@@ -19,7 +19,8 @@ import '../forensics/keys.dart';
 import '../forensics/reputation.dart';
 import '../forensics/tls_info.dart';
 import '../models.dart';
-import '../url_analyzer.dart' show analyzeUrl, brands, officialBrandFor, registrableDomain;
+import '../sitecheck/site_check.dart';
+import '../url_analyzer.dart' show StepLogger, analyzeUrl, brands, officialBrandFor, registrableDomain;
 import '../webintel/web_intel.dart';
 import 'trace_input.dart';
 import 'trace_models.dart';
@@ -50,6 +51,8 @@ class Tracer {
   final WebIntel? webIntel;
   /// The user's own numbers and accounts, never searched online.
   final Set<String> ownDetails;
+  /// Works out what a website is for and how the internet sees it.
+  final SiteChecker? siteChecker;
 
   Tracer({
     required this.client,
@@ -62,7 +65,11 @@ class Tracer {
     this.pace = Duration.zero,
     this.webIntel,
     this.ownDetails = const {},
+    this.siteChecker,
   });
+
+  late final SiteChecker _site = siteChecker ?? SiteChecker(client: client, keys: keys, timeout: timeout);
+  List<ReputationHit> _repHits = const [];
 
   final _out = StreamController<TraceEvent>();
   final Map<String, TraceNode> _nodes = {};
@@ -192,7 +199,7 @@ class Tracer {
     _emit(TraceNodeEvent(n));
   }
 
-  void _flag(String title, String why, int weight, {String? nodeId, bool demo = false}) {
+  void _flag(String title, String why, int weight, {String? nodeId, bool demo = false, RiskLevel? floor}) {
     if (nodeId != null && weight > 0) {
       final n = _nodes[nodeId];
       if (n != null) {
@@ -206,7 +213,7 @@ class Tracer {
       l.alarming = true;
       _emit(TraceLookupEvent(l));
     }
-    _emit(TraceFlagEvent(TraceFlag(title, why, weight, nodeId: nodeId, demo: demo)));
+    _emit(TraceFlagEvent(TraceFlag(title, why, weight, nodeId: nodeId, demo: demo, floor: floor)));
   }
 
   Future<void> _gate() async {
@@ -313,6 +320,7 @@ class Tracer {
       }
       _done++;
       _emit(TraceProgressEvent(_done, _total));
+      _repHits = hits;
       for (final h in hits) {
         _flag('Listed by ${h.service}', h.summary, h.weight, nodeId: last);
       }
@@ -328,11 +336,15 @@ class Tracer {
       final d = registrableDomain(h);
       if (!domains.contains(d)) domains.add(d);
     }
+    // What the site is for is read where the link ends up.
+    final fin = hops?.last.$1 ?? uri;
     for (final d in domains.take(3)) {
       if (_cancelled) return;
       final host = hosts.firstWhere((h) => registrableDomain(h) == d, orElse: () => d);
       final from = hops == null ? start : _nodes.keys.where((k) => k.startsWith('url:') && Uri.tryParse(k.substring(4))?.host.toLowerCase() == host).lastOrNull;
-      await _traceDomain(d, host, from ?? start, brand: brand, official: official || officialBrandFor(d) != null);
+      final end = registrableDomain(fin.host.toLowerCase()) == d;
+      await _traceDomain(d, host, from ?? start,
+          brand: brand, official: official || officialBrandFor(d) != null, purpose: end || domains.length == 1, page: end ? fin : null);
     }
   }
 
@@ -393,7 +405,7 @@ class Tracer {
 
   // ------------------------------------------------------------ websites
 
-  Future<void> _traceDomain(String domain, String host, String? parent, {String? brand, bool official = false}) async {
+  Future<void> _traceDomain(String domain, String host, String? parent, {String? brand, bool official = false, bool purpose = true, Uri? page}) async {
     final id = _node(TraceKind.domain, domain, domain, parent: parent, edge: 'on website');
     if (id == null) return;
     if (official) _fact(id, 'Official', 'Listed as an official website of ${officialBrandFor(domain) ?? 'a known brand'}');
@@ -410,9 +422,11 @@ class Tracer {
       ].join(' ');
     });
     final ns = <String>{};
+    int? ageDays;
     if (rdap != null) {
       if (rdap.created != null) {
         final age = DateTime.now().difference(rdap.created!).inDays;
+        ageDays = age;
         _fact(id, 'Registered', '${shortDate(rdap.created!)} (${_ago(age)})');
         if (!official) {
           if (age < 30) {
@@ -509,7 +523,139 @@ class Tracer {
     // Kantoi's own scam map, on the phone.
     await _intelDomain(domain, id, [...a], ns.toList());
 
-    if (!official) await _webReports(WebIdentifier.domain(domain), id);
+    if (purpose) {
+      await _siteCheck(domain, host, id, page: page, ageDays: ageDays, official: official);
+    } else if (!official) {
+      await _webReports(WebIdentifier.domain(domain), id);
+    }
+  }
+
+  // ------------------------------------------------------------ purpose and reputation
+
+  /// A logger for steps run inside another engine, drawn as trace lookups.
+  StepLogger _logInto(String? nodeId, List<TraceLookup> into) => (tool, action, {bool sentOffDevice = false}) {
+        final l = TraceLookup(_ids++, LogStep(tool: tool, action: action, sentOffDevice: sentOffDevice), nodeId);
+        into.add(l);
+        _emit(TraceLookupEvent(l));
+        return l.step;
+      };
+
+  void _settle(List<TraceLookup> steps) {
+    for (final l in steps) {
+      if (l.step.status == StepStatus.running) {
+        l.step
+          ..result = 'No answer in time, skipped'
+          ..status = StepStatus.failed;
+      }
+      _emit(TraceLookupEvent(l));
+    }
+  }
+
+  /// What the website is for (its page), how the internet sees it (top-sites
+  /// rank, age, web reports, blocklists), and the risk that follows. Adds a
+  /// "Purpose" and a "Reputation" node under the website.
+  Future<void> _siteCheck(String domain, String host, String id, {Uri? page, int? ageDays, required bool official}) async {
+    final checker = _site;
+    final url = page ?? Uri.parse('https://$host/');
+    final saved = await checker.cache.get(domain, DateTime.now());
+    PurposeResult purpose;
+    var mcmc = false, ranked = false, fetched = false;
+    int? rank;
+    if (saved != null) {
+      final h = DateTime.now().difference(saved.checkedAt).inHours;
+      final s = LogStep(
+          tool: purposeTool,
+          action: 'Looking for a saved check of $domain',
+          result: 'Checked ${h == 0 ? 'less than an hour' : '$h h'} ago, reused (kept 24 h): ${saved.purpose.headline}',
+          status: StepStatus.done);
+      _emit(TraceLookupEvent(TraceLookup(_ids++, s, id)));
+      purpose = saved.purpose;
+      mcmc = saved.mcmcBlocked;
+      ranked = saved.trancoChecked;
+      rank = saved.trancoRank;
+      ageDays ??= saved.ageDays;
+    } else {
+      final sub = <TraceLookup>[];
+      final r = await _lookup<(PurposeResult, PageSample)>(
+          purposeTool,
+          official
+              ? 'Matching $domain with the official websites list'
+              : 'Opening ${url.host} in the isolated reader to see what the site is for (no scripts, cookies or logins)',
+          online: !official,
+          nodeId: id,
+          limit: slowTimeout + const Duration(seconds: 8),
+          run: () => checker.purpose(url, log: _logInto(id, sub)),
+          describe: (r) => '${r.$1.headline} (${r.$1.confidenceLabel.toLowerCase()} confidence, from ${basisLabel(r.$1.basis).toLowerCase()})');
+      _settle(sub);
+      // Offline or too slow: the address alone still says something.
+      purpose = r?.$1 ?? classifyPurpose(PageSample.address(url));
+      mcmc = r?.$2.mcmcBlocked ?? false;
+      fetched = r?.$2.fetched ?? false;
+      if (!official) {
+        final t = await _lookup<(int?,)>(popularityTool, 'Asking the Tranco top-sites list how popular $domain is',
+            online: true, nodeId: id, run: () async => (await checker.tranco(domain),), describe: (t) {
+          final r = t.$1;
+          return r == null ? 'Not in the top 1 million websites' : 'Rank #$r worldwide${r <= wellKnownRank ? ' (a well-known site)' : ''}';
+        });
+        if (t != null) {
+          ranked = true;
+          rank = t.$1;
+        }
+      }
+    }
+
+    WebIntelResult? web;
+    if (!official) {
+      if (rank != null && rank <= wellKnownRank) {
+        final s = LogStep(
+            tool: webTool,
+            action: 'Searching the web for reports about $domain',
+            result: 'Skipped: a well-known site (pages about it are usually warnings about fakes, not about the site itself)',
+            status: StepStatus.skipped);
+        _emit(TraceLookupEvent(TraceLookup(_ids++, s, id)));
+      } else {
+        web = await _webReports(WebIdentifier.domain(domain), id);
+      }
+    }
+
+    final report = SiteReport(
+      domain: domain,
+      url: url.toString(),
+      purpose: withWebPurpose(purpose, web, url),
+      trancoChecked: ranked,
+      trancoRank: rank,
+      ageDays: ageDays,
+      listings: _repHits,
+      web: web,
+      mcmcBlocked: mcmc,
+      checkedAt: saved?.checkedAt ?? DateTime.now(),
+      fromCache: saved != null,
+    );
+    if (saved == null && (fetched || ranked)) await checker.cache.put(report);
+
+    final p = report.purpose;
+    final pid = _node(TraceKind.purpose, domain, 'Purpose: ${purposeLabel(p.purpose)}', parent: id, edge: 'used for', flagged: p.risky, facts: [
+      ('What it is', p.headline),
+      ('Why it matters', p.explanation),
+      if (p.reasons.isNotEmpty) ('Evidence', p.reasons.join('; ')),
+      ('How Kantoi knows', basisLabel(p.basis)),
+      ('Confidence', p.confidenceLabel),
+      if (p.aiPurpose != null)
+        ('AI reading', '${purposeLabel(p.aiPurpose!)} (${((p.aiConfidence ?? 0) * 100).round()}% sure)${p.aiReasons.isEmpty ? '' : ': ${p.aiReasons.join('; ')}'}'),
+      if (p.title != null) ('Page title', p.title!),
+    ]);
+    final score = report.reputationScore;
+    final rid = _node(TraceKind.reputation, domain, 'Reputation: ${report.reputationLabel}', parent: id, edge: 'reputation',
+        flagged: score != null && score < 40, facts: [
+      ('Score', score == null ? 'Not checked' : '$score/100'),
+      ('Summary', report.reputationSummary),
+      for (final s in report.sources) (s.label, '${s.detail}${s.url == null ? '' : ' (${s.url})'}'),
+    ]);
+    for (final r in report.reasons()) {
+      final on = r.isRisk ? (r.title == p.headline ? pid : rid) ?? id : null;
+      _flag(r.title, r.why, r.weight, nodeId: on, floor: r.floor);
+    }
+    _emit(TraceSiteEvent(report));
   }
 
   Future<void> _ipOwner(String ip) async {
@@ -725,18 +871,18 @@ class Tracer {
 
   /// Public web reports about [web], each confirmed page added to the map as
   /// "Report on (site)" with its evidence.
-  Future<void> _webReports(WebIdentifier web, String nodeId) async {
+  Future<WebIntelResult?> _webReports(WebIdentifier web, String nodeId) async {
     final w = webIntel;
-    if (w == null || _cancelled || !_nodes.containsKey(nodeId)) return;
+    if (w == null || _cancelled || !_nodes.containsKey(nodeId)) return null;
     if (web.isOwn(ownDetails)) {
       final s = LogStep(tool: webTool, action: 'Searching the web for reports', result: 'Your own ${web.kindLabel}, never searched', status: StepStatus.skipped);
       _emit(TraceLookupEvent(TraceLookup(_ids++, s, nodeId)));
-      return;
+      return null;
     }
     _total++;
     _emit(TraceProgressEvent(_done, _total));
     await _gate();
-    if (_cancelled) return;
+    if (_cancelled) return null;
     final steps = <TraceLookup>[];
     void redraw() {
       for (final l in steps) {
@@ -786,6 +932,7 @@ class Tracer {
     } else if (r.status == WebStatus.possible) {
       _flag('Possible scam reports online', 'Search results mention ${web.display} with scam words, but Kantoi could not open the pages to confirm.', 8, nodeId: nodeId);
     }
+    return r;
   }
 
   // ------------------------------------------------------------ helpers

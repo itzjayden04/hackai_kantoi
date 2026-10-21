@@ -3,8 +3,9 @@
 library;
 
 import '../models.dart';
+import '../sitecheck/site_check.dart' show SiteReport;
 
-enum TraceKind { message, url, domain, subdomain, sibling, ip, nameserver, mail, cert, hosting, country, phone, account, email, brand, related, webReport }
+enum TraceKind { message, url, domain, subdomain, sibling, ip, nameserver, mail, cert, hosting, country, phone, account, email, brand, related, webReport, purpose, reputation }
 
 String traceKindLabel(TraceKind k) => switch (k) {
       TraceKind.message => 'Message',
@@ -24,6 +25,8 @@ String traceKindLabel(TraceKind k) => switch (k) {
       TraceKind.brand => 'Imitated brand',
       TraceKind.related => 'Known scam case',
       TraceKind.webReport => 'Report on the web',
+      TraceKind.purpose => 'Website purpose',
+      TraceKind.reputation => 'Website reputation',
     };
 
 /// Short tag drawn inside a node.
@@ -45,6 +48,8 @@ String traceKindTag(TraceKind k) => switch (k) {
       TraceKind.brand => 'FAKE',
       TraceKind.related => 'CASE',
       TraceKind.webReport => 'RPT',
+      TraceKind.purpose => 'USE',
+      TraceKind.reputation => 'REP',
     };
 
 class TraceNode {
@@ -102,7 +107,10 @@ class TraceFlag {
   final int weight;
   final String? nodeId;
   final bool demo;
-  const TraceFlag(this.title, this.why, this.weight, {this.nodeId, this.demo = false});
+  /// The lowest level this sign allows, e.g. an illegal gambling site is
+  /// always high risk whatever else is found.
+  final RiskLevel? floor;
+  const TraceFlag(this.title, this.why, this.weight, {this.nodeId, this.demo = false, this.floor});
   bool get isRisk => weight > 0;
 }
 
@@ -138,6 +146,12 @@ class TraceFlagEvent extends TraceEvent {
   const TraceFlagEvent(this.flag);
 }
 
+/// What a website is for and how the internet sees it.
+class TraceSiteEvent extends TraceEvent {
+  final SiteReport site;
+  const TraceSiteEvent(this.site);
+}
+
 class TraceProgressEvent extends TraceEvent {
   final int done;
   final int total;
@@ -157,6 +171,8 @@ class TraceState {
   final Map<String, TraceEdge> edges = {};
   final List<TraceLookup> lookups = [];
   final List<TraceFlag> flags = [];
+  /// Purpose and reputation of each website checked, newest last.
+  final List<SiteReport> sites = [];
   int done = 0;
   int total = 0;
   bool started = false;
@@ -180,6 +196,10 @@ class TraceState {
         if (!lookups.any((l) => l.id == lookup.id)) lookups.add(lookup);
       case TraceFlagEvent(:final flag):
         flags.add(flag);
+      case TraceSiteEvent(:final site):
+        sites
+          ..removeWhere((x) => x.domain == site.domain)
+          ..add(site);
       case TraceProgressEvent(:final done, :final total):
         this.done = done;
         this.total = total;
@@ -197,9 +217,33 @@ class TraceState {
 
   double get progress => finished ? 1 : (total == 0 ? 0 : done / total);
 
-  int get score => flags.fold<int>(0, (a, f) => a + f.weight).clamp(0, 100);
+  int get score {
+    var s = flags.fold<int>(0, (a, f) => a + f.weight).clamp(0, 100);
+    for (final f in flags) {
+      final min = switch (f.floor) {
+        RiskLevel.danger => 60,
+        RiskLevel.suspicious => 30,
+        RiskLevel.caution => 10,
+        _ => 0,
+      };
+      if (s < min) s = min;
+    }
+    return s;
+  }
 
   RiskLevel get level => traceLevel(score);
+
+  /// A strong reassuring sign, such as an official or well-known website.
+  bool get trusted => flags.any((f) => f.weight <= -10);
+
+  String get riskLabel => traceRiskLabel(score, trusted: trusted);
+
+  /// The website the trace is mostly about: the riskiest, else the last.
+  SiteReport? get mainSite {
+    if (sites.isEmpty) return null;
+    final risky = [...sites]..sort((a, b) => b.level.index - a.level.index);
+    return risky.first.level == RiskLevel.safe ? sites.last : risky.first;
+  }
 
   Set<String> get countries => {for (final n in nodes.values) if (n.kind == TraceKind.country && n.country != null) n.country!};
 
@@ -218,11 +262,12 @@ RiskLevel traceLevel(int score) => score >= 45
             : RiskLevel.safe;
 
 /// HUD wording: the trace only reports signs it found, it never says "safe".
-String traceRiskLabel(int score) => switch (traceLevel(score)) {
+/// "Low risk" needs a strong reassuring sign ([trusted]).
+String traceRiskLabel(int score, {bool trusted = false}) => switch (traceLevel(score)) {
       RiskLevel.danger => 'High',
       RiskLevel.suspicious => 'Elevated',
       RiskLevel.caution => 'Some signs',
-      RiskLevel.safe => score > 0 ? 'Low' : 'No signs yet',
+      RiskLevel.safe => trusted ? 'Low risk' : (score > 0 ? 'Low' : 'No signs yet'),
     };
 
 const countryNames = {

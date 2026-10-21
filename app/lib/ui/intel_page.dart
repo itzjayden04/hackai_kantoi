@@ -8,6 +8,7 @@ import '../engine/attribution/graph.dart' show shortDate;
 import '../engine/attribution/intel_models.dart';
 import '../engine/attribution/intel_store.dart';
 import '../engine/forensics/tls_probe.dart';
+import '../engine/sitecheck/site_check.dart' show SiteChecker;
 import '../engine/trace/trace_models.dart';
 import '../engine/trace/tracer.dart' show Tracer;
 import '../engine/webintel/web_intel.dart' show WebIntel;
@@ -16,6 +17,7 @@ import 'activity_log.dart';
 import 'intel_graph_view.dart';
 import 'kit.dart';
 import 'theme.dart';
+import 'trace/site_summary.dart';
 import 'trace/trace_canvas.dart';
 import 'trace/trace_widgets.dart';
 
@@ -142,6 +144,9 @@ class _IntelPageState extends State<IntelPage> {
       // otherwise public search pages). The user's own details are skipped.
       webIntel: WebIntel(client: client, llm: appState.llm),
       ownDetails: appState.ownDetails,
+      // What each website is for (page words, then Gemini on the page text
+      // when a key is set) and its top-sites rank.
+      siteChecker: SiteChecker(client: client, llm: appState.llm, keys: appState.keys),
       // A short beat between lookups so each step can be followed on the map.
       pace: const Duration(milliseconds: 250),
     );
@@ -288,6 +293,8 @@ class _IntelPageState extends State<IntelPage> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           how(Icons.cloud_outlined, K.primaryContainer, 'Follows redirects and asks public records: domain registry, DNS, certificate logs and IP owners.'),
           how(Icons.lock_outline_rounded, K.green, 'Checks look-alike names, number formats and the scam map saved on this phone.'),
+          how(Icons.category_outlined, K.amber,
+              'Reads what a website is for (gambling, "guaranteed returns", loans, fake logins) and how the internet rates it: top-sites rank, age and web reports.'),
           how(Icons.hub_outlined, K.primary, 'Draws every server, nameserver, certificate and country it finds, live.'),
           const SizedBox(height: 6),
           Text('Passive lookups only: Kantoi never scans, logs in to or attacks anything.', style: t.bodySmall),
@@ -361,6 +368,10 @@ class _IntelPageState extends State<IntelPage> {
     return [
       const SizedBox(height: 16),
       TraceHud(state: s, elapsed: _elapsed, paused: paused),
+      if (s.mainSite case final site?) ...[
+        const SizedBox(height: 12),
+        Reveal(child: SiteSummaryCard(site: site)),
+      ],
       const SizedBox(height: 12),
       SizedBox(
         height: 380,
