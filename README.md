@@ -41,6 +41,9 @@ Or from the release page, step by step:
 
 ## Install on Android
 
+No Android phone? See [Run Kantoi on a Windows PC](docs/run-on-windows-emulator.md) (Android Emulator, or mirror a phone with scrcpy).
+
+
 1. **Download** `Kantoi-android.apk` on the phone and open it from the notification or the Files / File Manager app.
 2. **Allow unknown apps.** If asked, allow your browser or file manager to "Install unknown apps", then tap **Install**. (If a security scan appears, tap **Install anyway** / **Continue installation**.)
 3. **Allow restricted settings.** Android blocks Accessibility and notification access for apps installed this way until you allow it:
