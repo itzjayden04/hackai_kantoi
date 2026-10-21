@@ -31,6 +31,8 @@ class _CheckPageState extends State<CheckPage> {
   List<LogStep> _steps = [];
   Investigation? _result;
   bool _busy = false;
+  // Bumped to cancel: results of an older run are ignored.
+  int _runId = 0;
   String? _error;
   String? _note;
   String? _fileName;
@@ -40,6 +42,7 @@ class _CheckPageState extends State<CheckPage> {
   void initState() {
     super.initState();
     pendingShare.addListener(_takeShare);
+    appState.backHandlers[0] = _back;
     _text.addListener(() => setState(() {}));
     WidgetsBinding.instance.addPostFrameCallback((_) => _takeShare());
   }
@@ -47,6 +50,7 @@ class _CheckPageState extends State<CheckPage> {
   @override
   void dispose() {
     pendingShare.removeListener(_takeShare);
+    if (appState.backHandlers[0] == _back) appState.backHandlers.remove(0);
     _focus.dispose();
     _scroll.dispose();
     _text.dispose();
@@ -74,6 +78,8 @@ class _CheckPageState extends State<CheckPage> {
       return;
     }
     FocusManager.instance.primaryFocus?.unfocus();
+    final run = ++_runId;
+    bool live() => mounted && run == _runId;
     setState(() {
       _busy = true;
       _error = null;
@@ -98,7 +104,7 @@ class _CheckPageState extends State<CheckPage> {
         askConsent: (what) => askMediaConsent(context, what),
         virusTotalKey: intakeSettings.virusTotalKey,
         onStep: (s) {
-          if (mounted) setState(() => _steps = s);
+          if (live()) setState(() => _steps = s);
         },
       );
       final r = await investigate(
@@ -107,9 +113,10 @@ class _CheckPageState extends State<CheckPage> {
         options: appState.options,
         extras: routed.extras,
         onStep: (s) {
-          if (mounted) setState(() => _steps = s);
+          if (live()) setState(() => _steps = s);
         },
       );
+      if (!live()) return;
       appState.addHistory(r);
       if (mounted) {
         setState(() {
@@ -119,11 +126,11 @@ class _CheckPageState extends State<CheckPage> {
         _toTop();
       }
     } on IntakeError catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (live()) setState(() => _error = e.message);
     } catch (e) {
-      if (mounted) setState(() => _error = 'Something went wrong: $e');
+      if (live()) setState(() => _error = 'Something went wrong: $e');
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (live()) setState(() => _busy = false);
     }
   }
 
@@ -197,6 +204,16 @@ class _CheckPageState extends State<CheckPage> {
     if (v == null) return;
     _text.text = v;
     await _check(text: v, kind: IntakeKind.qr, source: Source.qr);
+  }
+
+  /// Back button: stop a running check, or close the result, and return
+  /// to the empty Check screen. False when there is nothing to go back from.
+  bool _back() {
+    if (!_busy && _result == null && _error == null) return false;
+    _runId++;
+    _busy = false;
+    _clear();
+    return true;
   }
 
   void _clear() {

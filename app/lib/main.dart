@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'guard/guard_background.dart';
 import 'guard/guard_control.dart';
@@ -48,17 +49,17 @@ class _KantoiAppState extends State<KantoiApp> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'Kantoi',
-        debugShowCheckedModeBanner: false,
-        navigatorKey: navigatorKey,
-        theme: buildTheme(Brightness.light),
-        // The design is light-first; dark mode follows later.
-        themeMode: ThemeMode.light,
-        home: AnimatedSwitcher(
-          duration: K.medium,
-          child: _setup ? SetupFlow(key: const ValueKey('setup'), onDone: () => setState(() => _setup = false)) : const Shell(),
-        ),
-      );
+    title: 'Kantoi',
+    debugShowCheckedModeBanner: false,
+    navigatorKey: navigatorKey,
+    theme: buildTheme(Brightness.light),
+    // The design is light-first; dark mode follows later.
+    themeMode: ThemeMode.light,
+    home: AnimatedSwitcher(
+      duration: K.medium,
+      child: _setup ? SetupFlow(key: const ValueKey('setup'), onDone: () => setState(() => _setup = false)) : const Shell(),
+    ),
+  );
 }
 
 class Shell extends StatefulWidget {
@@ -77,6 +78,28 @@ class _ShellState extends State<Shell> {
   // Tabs are built the first time they are opened, then kept alive so a
   // running trace or check survives switching tabs.
   final _built = <int>{0};
+  DateTime? _exitAsked;
+
+  /// Back steps out one level at a time: first inside the tab (stop a check
+  /// or trace, close a result), then to the Check tab, then a second press
+  /// within two seconds leaves the app.
+  void _onBack() {
+    final tab = appState.tab.value;
+    if (appState.backHandlers[tab]?.call() ?? false) return;
+    if (tab != 0) {
+      appState.tab.value = 0;
+      return;
+    }
+    final now = DateTime.now();
+    if (_exitAsked != null && now.difference(_exitAsked!) < const Duration(seconds: 2)) {
+      SystemNavigator.pop();
+      return;
+    }
+    _exitAsked = now;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('Press back again to close Kantoi'), duration: Duration(seconds: 2)));
+  }
 
   @override
   void initState() {
@@ -97,57 +120,73 @@ class _ShellState extends State<Shell> {
   }
 
   Widget _page(int i) => switch (i) {
-        0 => const CheckPage(),
-        1 => const IntelPage(),
-        2 => const LearnPage(),
-        _ => const EmergencyPage(embedded: true),
-      };
+    0 => const CheckPage(),
+    1 => const IntelPage(),
+    2 => const LearnPage(),
+    _ => const EmergencyPage(embedded: true),
+  };
 
   @override
   Widget build(BuildContext context) {
     final tab = appState.tab.value;
-    return Scaffold(
-      extendBody: true,
-      appBar: AppBar(
-        titleSpacing: 16,
-        title: const KantoiLogo(),
-        actions: [
-          const ProtectedPill(),
-          IconButton(
-            tooltip: 'Settings',
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => Scaffold(appBar: AppBar(title: const Text('Settings')), body: const SettingsPage()))),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
-      body: Column(children: [
-        const CaseReminderBanner(),
-        Expanded(
-          child: Stack(children: [
-            for (var i = 0; i < _tabs.length; i++)
-              if (_built.contains(i))
-                IgnorePointer(
-                  ignoring: i != tab,
-                  child: AnimatedOpacity(
-                    opacity: i == tab ? 1 : 0,
-                    duration: K.fast,
-                    child: AnimatedSlide(
-                      offset: i == tab ? Offset.zero : const Offset(0, 0.02),
-                      duration: K.medium,
-                      curve: K.curve,
-                      child: TickerMode(enabled: i == tab, child: KeyedSubtree(key: ValueKey(i), child: _page(i))),
-                    ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _onBack();
+      },
+      child: Scaffold(
+        extendBody: true,
+        appBar: AppBar(
+          leading: tab == 0 ? null : IconButton(tooltip: 'Back', icon: const Icon(Icons.arrow_back_rounded), onPressed: _onBack),
+          titleSpacing: tab == 0 ? 16 : 0,
+          title: const KantoiLogo(),
+          actions: [
+            const ProtectedPill(),
+            IconButton(
+              tooltip: 'Settings',
+              icon: const Icon(Icons.settings_outlined),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('Settings')),
+                    body: const SettingsPage(),
                   ),
                 ),
-          ]),
+              ),
+            ),
+            const SizedBox(width: 4),
+          ],
         ),
-      ]),
-      bottomNavigationBar: _GlassNav(
-        index: tab,
-        items: _tabs,
-        onTap: (i) => appState.tab.value = i,
+        body: Column(
+          children: [
+            const CaseReminderBanner(),
+            Expanded(
+              child: Stack(
+                children: [
+                  for (var i = 0; i < _tabs.length; i++)
+                    if (_built.contains(i))
+                      IgnorePointer(
+                        ignoring: i != tab,
+                        child: AnimatedOpacity(
+                          opacity: i == tab ? 1 : 0,
+                          duration: K.fast,
+                          child: AnimatedSlide(
+                            offset: i == tab ? Offset.zero : const Offset(0, 0.02),
+                            duration: K.medium,
+                            curve: K.curve,
+                            child: TickerMode(
+                              enabled: i == tab,
+                              child: KeyedSubtree(key: ValueKey(i), child: _page(i)),
+                            ),
+                          ),
+                        ),
+                      ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        bottomNavigationBar: _GlassNav(index: tab, items: _tabs, onTap: (i) => appState.tab.value = i),
       ),
     );
   }
@@ -174,15 +213,17 @@ class _GlassNav extends StatelessWidget {
             top: false,
             child: SizedBox(
               height: 64,
-              child: Row(children: [
-                for (var i = 0; i < items.length; i++)
-                  Expanded(
-                    child: InkResponse(
-                      onTap: () => onTap(i),
-                      child: _NavItem(item: items[i], selected: i == index, danger: i == 3),
+              child: Row(
+                children: [
+                  for (var i = 0; i < items.length; i++)
+                    Expanded(
+                      child: InkResponse(
+                        onTap: () => onTap(i),
+                        child: _NavItem(item: items[i], selected: i == index, danger: i == 3),
+                      ),
                     ),
-                  ),
-              ]),
+                ],
+              ),
             ),
           ),
         ),
@@ -200,20 +241,26 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = danger ? K.red : (selected ? K.primary : K.outline);
-    return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      AnimatedContainer(
-        duration: K.medium,
-        curve: K.curve,
-        padding: EdgeInsets.symmetric(horizontal: selected ? 18 : 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: selected ? (danger ? K.red : K.primary).withValues(alpha: 0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(99),
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        AnimatedContainer(
+          duration: K.medium,
+          curve: K.curve,
+          padding: EdgeInsets.symmetric(horizontal: selected ? 18 : 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: selected ? (danger ? K.red : K.primary).withValues(alpha: 0.1) : Colors.transparent,
+            borderRadius: BorderRadius.circular(99),
+          ),
+          child: Icon(selected ? item.$2 : item.$1, color: c, size: 24),
         ),
-        child: Icon(selected ? item.$2 : item.$1, color: c, size: 24),
-      ),
-      const SizedBox(height: 2),
-      Text(item.$3, style: TextStyle(fontSize: 11, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: c)),
-    ]);
+        const SizedBox(height: 2),
+        Text(
+          item.$3,
+          style: TextStyle(fontSize: 11, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: c),
+        ),
+      ],
+    );
   }
 }
 
@@ -269,15 +316,24 @@ class _ProtectedPillState extends State<ProtectedPill> with WidgetsBindingObserv
           },
           child: Padding(
             padding: const EdgeInsets.fromLTRB(4, 0, 12, 0),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              on ? PulseDot(color: c, size: 7) : Padding(padding: const EdgeInsets.all(4), child: Icon(Icons.error_outline_rounded, size: 14, color: c)),
-              Text(_s == null ? '...' : (on ? 'Protected' : 'Turn on'),
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c)),
-            ]),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                on
+                    ? PulseDot(color: c, size: 7)
+                    : Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(Icons.error_outline_rounded, size: 14, color: c),
+                      ),
+                Text(
+                  _s == null ? '...' : (on ? 'Protected' : 'Turn on'),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 }
-

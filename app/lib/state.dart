@@ -23,6 +23,10 @@ class AppState extends ChangeNotifier {
   /// account or message), e.g. from a result screen or a notification tap.
   final traceRequest = ValueNotifier<String?>(null);
 
+  /// Each tab can register what Back does inside it (stop a check, close a
+  /// result). It returns false when the tab is already at its start.
+  final Map<int, bool Function()> backHandlers = {};
+
   void openTrace(String target) {
     traceRequest.value = target;
     tab.value = 1;

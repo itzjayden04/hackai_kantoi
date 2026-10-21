@@ -74,6 +74,7 @@ class _IntelPageState extends State<IntelPage> {
     super.initState();
     intel.addListener(_changed);
     appState.traceRequest.addListener(_onRequest);
+    appState.backHandlers[1] = _back;
     // Refresh in the background when the last crawl is a few hours old.
     unawaited(intel.ensureLoaded().then((_) => widget.autoCrawl ? intel.crawl() : null));
     WidgetsBinding.instance.addPostFrameCallback((_) => _onRequest());
@@ -96,9 +97,22 @@ class _IntelPageState extends State<IntelPage> {
   void dispose() {
     intel.removeListener(_changed);
     appState.traceRequest.removeListener(_onRequest);
+    if (appState.backHandlers[1] == _back) appState.backHandlers.remove(1);
     _stop();
     _q.dispose();
     super.dispose();
+  }
+
+  /// Back button: stop the trace and return to the empty Trace screen.
+  bool _back() {
+    if (_s == null) return false;
+    _stop();
+    setState(() {
+      _s = null;
+      _tracer = null;
+      _selected = null;
+    });
+    return true;
   }
 
   void _stop() {
