@@ -9,6 +9,7 @@ class _Rule {
   final String explanation;
   _Rule(this.category, String pattern, this.weight, this.title, this.explanation)
       : pattern = RegExp(pattern, caseSensitive: false, unicode: true);
+  _Rule.re(this.category, this.pattern, this.weight, this.title, this.explanation);
 }
 
 // Patterns cover English plus the Malay and Manglish phrasing Malaysian scams
@@ -27,7 +28,7 @@ final List<_Rule> _rules = [
   // Credentials
   _Rule(CueCategory.credentials, r'\b(otp|tac|one[- ]time (password|pin)|pin( number)?|password|kata laluan|cvv|card number|nombor kad|login details|username)\b', 14,
       'Asks for secret codes', 'No real bank, courier or agency will ever ask for your OTP, TAC, PIN or password.'),
-  _Rule(CueCategory.credentials, r"(?<!(not|never|n't|jangan) )\b(reply|send|give|forward|share|tell|bagi|hantar)( me| us)? (with )?(the |your |that )?(\d[- ]?digits? )?(code|otp|tac|pin|verification code|kod)\b", 26,
+  _Rule(CueCategory.credentials, r"(?<!(not|never|n't|jangan) )\b(reply|send|give|forward|share|tell|bagi|hantar)( me| us)? (with )?(the |your |that )?(\d[- ]?digits? |login |verification |security |sms |whatsapp )?(code|otp|tac|pin|verification code|kod)\b", 26,
       'Wants your code', 'Anyone asking you to send them a code you received is trying to take over your account.'),
   _Rule(CueCategory.credentials, r'\b(verify|update|confirm|reactivate|unlock|sahkan|kemas ?kini)\b.{0,40}\b(account|akaun|identity|details|maklumat|ic|mykad)\b', 10,
       'Asks you to "verify" your account', 'Verification requests through a link are the most common way bank logins get stolen.'),
@@ -60,7 +61,7 @@ final List<_Rule> _rules = [
       'Unrealistic returns', 'Guaranteed or very high returns do not exist in legitimate investing.'),
   _Rule(CueCategory.investment, r'\b(forex|trading platform|crypto (trading|mining|platform)|investment (plan|package|platform|group)|pelaburan|mentor|signal group|vip group|insider|tip(s)? from my uncle|uncle.{0,25}\btips?|arbitrage|mining pool)\b', 9,
       'Investment pitch', 'Investment talk from strangers or new online contacts is how most investment scams begin.'),
-  _Rule(CueCategory.investment, r'\b(part[- ]time|kerja sambilan|work from home|kerja dari rumah|simple tasks?|tugasan mudah|like (and|&) (follow|subscribe)|rate (products|hotels)|boost (sales|ratings)|merchant task|commission|komisen|earn (rm|\$)?\s?\d+ (daily|a day|sehari))\b', 11,
+  _Rule(CueCategory.investment, r'\b(part[- ]time|kerja sambilan|work from home|kerja dari rumah|simple tasks?|tugasan mudah|like (and|&) (follow|subscribe)|rate (products|hotels)|boost (sales|ratings)|merchant task|commission|komisen|(earn|gaji|salary|income) (rm|\$)?\s?\d+( to (rm|\$)?\s?\d+)? (daily|a day|per day|sehari))\b', 11,
       'Easy-money job offer', 'Paid "like and review" tasks that later need a deposit are a common job scam.'),
   // Romance
   _Rule(CueCategory.romance, r'\b(hi|hello|hey|morning|good (morning|night)|night|miss you),? (dear|darling|babe|baby|honey|sayang)\b', 6,
@@ -75,7 +76,7 @@ final List<_Rule> _rules = [
   _Rule(CueCategory.link, r'\b(download|install|muat turun|pasang)\b.{0,40}\b(app|apk|aplikasi)\b.{0,40}\b(link|pautan|here|sini)\b|\.apk\b', 14,
       'Asks you to install an app from a link', 'Apps sent by message can read your SMS codes and take over your bank account. Only install apps from the official store.'),
   // Impersonation of known contacts
-  _Rule(CueCategory.impersonation, r"\b(this is my new number|nombor baru|i changed my number|lost my phone|phone (rosak|spoiled|broken)|it'?s me,? (your|ur))\b", 12,
+  _Rule.re(CueCategory.impersonation, newNumberCue, 12,
       'Claims a new number', '"New number" messages are how scammers pretend to be friends or family.'),
   _Rule(CueCategory.impersonation, r'\b(parcel|bungkusan|package|delivery|penghantaran|pos ?laju|poslaju|j&t|dhl|ninja ?van|courier|kurier).{0,60}\b(held|ditahan|failed|gagal|pending|unpaid|fee|caj|address|alamat|reschedul)', 12,
       'Parcel problem', 'Fake "parcel held, pay a small fee" messages are among the most common scams in Malaysia.'),

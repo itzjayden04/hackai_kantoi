@@ -52,6 +52,18 @@ final List<_Script> _scripts = [
     _Stage('Asks you for money',
         r"\b(send (me )?money|lend me|pinjam|transfer.{0,30}(to me|for me|my account)|pay (the )?(fee|charge|customs)|help me (pay|with (the )?money)|bank in)\b"),
   ]),
+  _Script('friend-in-need scam', CueCategory.impersonation, [
+    _Stage('Says they have a new number or lost their phone',
+        r"\b(new (phone )?(number|no)|(nombor|no|number) (baru|lain)|changed my number|lost my phone|(hand)?phone( (aku|saya|i|my))? (rosak|hilang|spoil(ed|t)?|broken|lost|stolen)|hp (rosak|hilang)|it'?s me,? (your|ur))\b"),
+    _Stage('Tells you about a sudden emergency',
+        r'\b(emergency|kecemasan|darurat|accident|kemalangan|hospital|stuck|tersangkut|stranded|in trouble|dalam masalah|card (is |kena )?(blocked|block|frozen)|lost my (wallet|card))\b'),
+    _Stage('Asks to borrow money quickly',
+        r'\b(lend me|pinjam|borrow|(transfer|tf|bank ?in|send|give|bagi|tng) (me|aku|saya)\b.{0,30}(money|duit|cash|rm ?\d+|\d+)|need (some )?(money|duit|cash)|pay (you )?back|bayar balik)'),
+    _Stage("Can't talk on the phone or asks you to keep quiet",
+        r"\b((can'?t|cannot|tak (boleh|dapat)) (talk|call|answer|angkat|cakap)|(don'?t|jangan) (call|telefon) (me|aku)|(don'?t|dont|jangan) (tell|beritahu|bagitahu))\b"),
+    _Stage('Sends an account or e-wallet to pay into',
+        r'\b(this account|akaun (ni|ini)|acc(ount)? no|a/c|tng|touch ?n ?go|duit ?now|\d{10,16})\b'),
+  ]),
   _Script('parcel scam', CueCategory.impersonation, [
     _Stage('Says you have a parcel',
         r'\b(parcel|bungkusan|package|pakej|delivery|penghantaran|shipment|courier|kurier|pos ?laju|j&t|dhl|ninja ?van)\b'),

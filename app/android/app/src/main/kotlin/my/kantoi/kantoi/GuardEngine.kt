@@ -22,6 +22,7 @@ object GuardEngine {
     private var engine: FlutterEngine? = null
     private var channel: MethodChannel? = null
     private var ready = false
+    private var startedAt = 0L
     private val queue = ArrayDeque<Triple<String, Map<String, Any?>, (Map<*, *>?) -> Unit>>()
     private val main = Handler(Looper.getMainLooper())
 
@@ -88,16 +89,36 @@ object GuardEngine {
     fun call(ctx: Context, method: String, args: Map<String, Any?>, done: (Map<*, *>?) -> Unit) {
         main.post {
             try {
+                // A background engine that never said "ready" (killed or stuck
+                // while the phone was saving power) is started again.
+                if (engine != null && !ready && System.currentTimeMillis() - startedAt > 60_000) restart()
                 start(ctx.applicationContext)
-                if (ready) send(method, args, done) else queue.addLast(Triple(method, args, done))
+                if (ready) {
+                    send(method, args, done)
+                } else {
+                    // Keep messages until the checks are ready, but never pile up forever.
+                    if (queue.size >= 100) queue.removeFirst().third(null)
+                    queue.addLast(Triple(method, args, done))
+                }
             } catch (e: Exception) {
                 done(null)
             }
         }
     }
 
+    private fun restart() {
+        try {
+            engine?.destroy()
+        } catch (e: Exception) {
+        }
+        engine = null
+        channel = null
+        ready = false
+    }
+
     private fun start(ctx: Context) {
         if (engine != null) return
+        startedAt = System.currentTimeMillis()
         val loader = FlutterInjector.instance().flutterLoader()
         loader.startInitialization(ctx)
         loader.ensureInitializationComplete(ctx, null)
@@ -129,7 +150,11 @@ object GuardEngine {
         })
     }
 
-    /** Handles a scored message: notification plus the pause card. */
+    /**
+     * Handles a scored message. A caution-level money request gets a
+     * notification only ("call them first"); suspicious and worse also get
+     * the pause card.
+     */
     fun handle(ctx: Context, result: Map<*, *>?, kind: String = "messages") {
         if (result == null || result["alert"] != true) return
         lastAlertAt = System.currentTimeMillis()
@@ -139,10 +164,21 @@ object GuardEngine {
         remember(ctx, result, if (kind == "chats") "chat" else "message", text)
         count(ctx, kind)
         val reasons = (result["reasons"] as? List<*>)?.joinToString(", ") { it.toString() }.orEmpty()
+        val checkedBy = result["checkedBy"]?.toString().orEmpty()
+        if (result["alertKind"] == "notify") {
+            Notifier.warn(
+                ctx,
+                if (result["moneyAsk"] == true && chat.isNotBlank()) "$chat is asking for money" else "Be careful with this message",
+                listOf(result["headline"]?.toString().orEmpty(), reasons, checkedBy).filter { it.isNotBlank() }.joinToString("\n"),
+                text,
+                result["level"]?.toString(),
+            )
+            return
+        }
         Notifier.warn(
             ctx,
             if (chat.isNotBlank()) "Careful: $chat may be a scammer" else "Careful: this message may be a scam",
-            listOf(result["headline"]?.toString().orEmpty(), reasons).filter { it.isNotBlank() }.joinToString("\n"),
+            listOf(result["headline"]?.toString().orEmpty(), reasons, checkedBy).filter { it.isNotBlank() }.joinToString("\n"),
             text,
             result["level"]?.toString(),
         )
@@ -158,7 +194,7 @@ object GuardEngine {
         val p = prefs(ctx)
         val old = JSONArray(p.getString("recent", "[]"))
         val o = JSONObject()
-        for (k in listOf("app", "chat", "level", "label", "headline", "text")) o.put(k, r[k]?.toString() ?: "")
+        for (k in listOf("app", "chat", "level", "label", "headline", "text", "checkedBy", "ai")) o.put(k, r[k]?.toString() ?: "")
         o.put("reasons", JSONArray((r["reasons"] as? List<*>)?.map { it.toString() } ?: emptyList<String>()))
         o.put("at", System.currentTimeMillis())
         o.put("kind", kind)
@@ -182,9 +218,14 @@ object GuardEngine {
         "org.telegram.messenger",
         "org.telegram.messenger.web",
         "org.thunderdog.challegram",
+        // SMS: Google, Samsung, AOSP, Honor and Huawei messaging apps.
         "com.google.android.apps.messaging",
         "com.samsung.android.messaging",
         "com.android.mms",
+        "com.android.messaging",
+        "com.hihonor.mms",
+        "com.huawei.message",
+        "com.huawei.mms",
         "com.facebook.orca",
         "com.instagram.android",
     )
