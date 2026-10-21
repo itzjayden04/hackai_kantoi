@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../engine/investigator.dart' show verdictLabel;
 import '../engine/models.dart';
+import '../engine/sitecheck/site_check.dart' show sitesOf;
 import '../engine/webintel/web_intel.dart' show webIntelOf;
 import '../engine/redaction.dart';
 import '../state.dart';
 import 'check/check_format.dart';
 import 'check/result_parts.dart';
+import 'trace/site_summary.dart';
 import 'emergency_page.dart';
 import 'explainer_card.dart';
 import 'feedback_bar.dart';
@@ -41,6 +43,8 @@ class ResultView extends StatelessWidget {
       VerdictCard(verdict: v, label: verdictLabel(v.level, inv.findings)),
       if (risky) _HelpRow(inv: inv),
       if (inlineActions) ResultActionBar(inv: inv),
+      // What each linked website is for and how the internet rates it.
+      for (final site in sitesOf(inv).take(2)) SiteSummaryCard(site: site),
       if (web.any((r) => r.reported)) WebEvidenceSection(results: web),
       _WhySection(inv: inv),
       if (web.isNotEmpty && !web.any((r) => r.reported)) WebEvidenceSection(results: web),
