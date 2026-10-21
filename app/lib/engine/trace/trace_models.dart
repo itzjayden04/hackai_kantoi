@@ -4,7 +4,7 @@ library;
 
 import '../models.dart';
 
-enum TraceKind { message, url, domain, subdomain, sibling, ip, nameserver, mail, cert, hosting, country, phone, account, email, brand, related }
+enum TraceKind { message, url, domain, subdomain, sibling, ip, nameserver, mail, cert, hosting, country, phone, account, email, brand, related, webReport }
 
 String traceKindLabel(TraceKind k) => switch (k) {
       TraceKind.message => 'Message',
@@ -23,6 +23,7 @@ String traceKindLabel(TraceKind k) => switch (k) {
       TraceKind.email => 'Email address',
       TraceKind.brand => 'Imitated brand',
       TraceKind.related => 'Known scam case',
+      TraceKind.webReport => 'Report on the web',
     };
 
 /// Short tag drawn inside a node.
@@ -43,6 +44,7 @@ String traceKindTag(TraceKind k) => switch (k) {
       TraceKind.email => 'MAIL',
       TraceKind.brand => 'FAKE',
       TraceKind.related => 'CASE',
+      TraceKind.webReport => 'RPT',
     };
 
 class TraceNode {

@@ -10,6 +10,7 @@ import '../engine/attribution/intel_store.dart';
 import '../engine/forensics/tls_probe.dart';
 import '../engine/trace/trace_models.dart';
 import '../engine/trace/tracer.dart' show Tracer;
+import '../engine/webintel/web_intel.dart' show WebIntel;
 import '../state.dart';
 import 'activity_log.dart';
 import 'intel_graph_view.dart';
@@ -137,6 +138,10 @@ class _IntelPageState extends State<IntelPage> {
       graph: intel.graph,
       keys: appState.keys,
       tlsProbe: widget.probeCertificates && tlsProbeSupported ? (h) => probeTls(h) : null,
+      // Public web reports (Google Search via Gemini when a key is set,
+      // otherwise public search pages). The user's own details are skipped.
+      webIntel: WebIntel(client: client, llm: appState.llm),
+      ownDetails: appState.ownDetails,
       // A short beat between lookups so each step can be followed on the map.
       pace: const Duration(milliseconds: 250),
     );

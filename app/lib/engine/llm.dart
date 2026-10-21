@@ -93,6 +93,48 @@ class LlmClient {
     return ps.map((p) => p['text'] ?? '').join();
   }
 
+  /// One Gemini call with Google Search grounding turned on. Returns the
+  /// model's text and the grounding metadata (the pages Google actually
+  /// searched), which callers must treat as the only real sources.
+  /// JSON output mode is not allowed together with the search tool, so the
+  /// prompt asks for JSON and the caller parses the text.
+  Future<GroundedReply> groundedSearch(String prompt, {Duration timeout = const Duration(seconds: 10)}) async {
+    if (config.kind != LlmKind.gemini || config.apiKey.isEmpty) throw LlmError('Google Search grounding needs a Gemini key');
+    final model = config.model.isEmpty ? 'gemini-flash-latest' : config.model;
+    final uri = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent');
+    final res = await _http
+        .post(uri,
+            headers: {'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey},
+            body: jsonEncode(groundedRequestBody(prompt)))
+        .timeout(timeout);
+    if (res.statusCode != 200) throw LlmError('Gemini error ${res.statusCode}: ${_short(res.body)}', status: res.statusCode);
+    final j = jsonDecode(res.body) as Map<String, dynamic>;
+    final cands = j['candidates'] as List? ?? [];
+    if (cands.isEmpty) throw LlmError('Gemini returned no answer');
+    final c = cands.first as Map<String, dynamic>;
+    final ps = (c['content']?['parts'] as List?) ?? [];
+    return GroundedReply(ps.map((p) => p['text'] ?? '').join(), (c['groundingMetadata'] as Map?)?.cast<String, dynamic>());
+  }
+
+  /// The request body for [groundedSearch].
+  static Map<String, dynamic> groundedRequestBody(String prompt) => {
+        'contents': [
+          {
+            'role': 'user',
+            'parts': [
+              {'text': prompt}
+            ]
+          }
+        ],
+        'tools': [
+          {'google_search': <String, dynamic>{}}
+        ],
+        'generationConfig': {'temperature': 0},
+      };
+
+  /// Parses the JSON object in a model reply (fenced or bare).
+  static Map<String, dynamic> parseJsonText(String s) => _parseJson(s);
+
   Future<String> _ollama(String system, String user, List<int>? img, Duration timeout) async {
     final base = config.baseUrl.isEmpty ? 'http://127.0.0.1:11434' : config.baseUrl;
     final res = await _http
@@ -146,9 +188,18 @@ class LlmClient {
   void close() => _http.close();
 }
 
+class GroundedReply {
+  final String text;
+  /// Gemini's groundingMetadata, or null when it answered without searching.
+  final Map<String, dynamic>? metadata;
+  const GroundedReply(this.text, this.metadata);
+}
+
 class LlmError implements Exception {
   final String message;
-  LlmError(this.message);
+  /// The HTTP status when the service answered with an error.
+  final int? status;
+  LlmError(this.message, {this.status});
   @override
   String toString() => message;
 }

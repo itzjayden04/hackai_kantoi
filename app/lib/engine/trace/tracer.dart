@@ -20,6 +20,7 @@ import '../forensics/reputation.dart';
 import '../forensics/tls_info.dart';
 import '../models.dart';
 import '../url_analyzer.dart' show analyzeUrl, brands, officialBrandFor, registrableDomain;
+import '../webintel/web_intel.dart';
 import 'trace_input.dart';
 import 'trace_models.dart';
 
@@ -44,6 +45,11 @@ class Tracer {
   final int maxNodes;
   /// A short pause between lookups so each one can be seen on the map.
   final Duration pace;
+  /// Searches the public web for reports about numbers, accounts, emails and
+  /// websites. Null skips it.
+  final WebIntel? webIntel;
+  /// The user's own numbers and accounts, never searched online.
+  final Set<String> ownDetails;
 
   Tracer({
     required this.client,
@@ -54,6 +60,8 @@ class Tracer {
     this.slowTimeout = const Duration(seconds: 12),
     this.maxNodes = 60,
     this.pace = Duration.zero,
+    this.webIntel,
+    this.ownDetails = const {},
   });
 
   final _out = StreamController<TraceEvent>();
@@ -500,6 +508,8 @@ class Tracer {
 
     // Kantoi's own scam map, on the phone.
     await _intelDomain(domain, id, [...a], ns.toList());
+
+    if (!official) await _webReports(WebIdentifier.domain(domain), id);
   }
 
   Future<void> _ipOwner(String ip) async {
@@ -635,6 +645,7 @@ class Tracer {
     for (final h in hits ?? const <IntelEntity>[]) {
       _relatedCase(h, id, 'This number is in the scam map');
     }
+    await _webReports(WebIdentifier.phone(raw), id);
     _semakMuleNote(id, p.display);
   }
 
@@ -658,6 +669,7 @@ class Tracer {
     for (final h in hits ?? const <IntelEntity>[]) {
       _relatedCase(h, id, 'This account is in the scam map');
     }
+    await _webReports(WebIdentifier.account(a.digits), id);
     _semakMuleNote(id, 'this account');
   }
 
@@ -701,11 +713,79 @@ class Tracer {
         _node(TraceKind.brand, b, 'Imitates $b', parent: id, edge: 'pretends to be', flagged: true, facts: [('Brand', b)]);
       }
     }
+    await _webReports(WebIdentifier.email(e), id);
     if (free) {
       _fact(id, 'Provider', 'Free email service ($domain)');
       return;
     }
     await _traceDomain(registrableDomain(domain), domain, id, official: officialBrandFor(domain) != null);
+  }
+
+  // ------------------------------------------------------------ web reports
+
+  /// Public web reports about [web], each confirmed page added to the map as
+  /// "Report on (site)" with its evidence.
+  Future<void> _webReports(WebIdentifier web, String nodeId) async {
+    final w = webIntel;
+    if (w == null || _cancelled || !_nodes.containsKey(nodeId)) return;
+    if (web.isOwn(ownDetails)) {
+      final s = LogStep(tool: webTool, action: 'Searching the web for reports', result: 'Your own ${web.kindLabel}, never searched', status: StepStatus.skipped);
+      _emit(TraceLookupEvent(TraceLookup(_ids++, s, nodeId)));
+      return;
+    }
+    _total++;
+    _emit(TraceProgressEvent(_done, _total));
+    await _gate();
+    if (_cancelled) return;
+    final steps = <TraceLookup>[];
+    void redraw() {
+      for (final l in steps) {
+        _emit(TraceLookupEvent(l));
+      }
+    }
+
+    final r = await w
+        .lookup(web, log: (tool, action, {bool sentOffDevice = false}) {
+          final l = TraceLookup(_ids++, LogStep(tool: tool, action: action, sentOffDevice: sentOffDevice), nodeId);
+          steps.add(l);
+          _emit(TraceLookupEvent(l));
+          return l.step;
+        }, onChange: redraw)
+        .timeout(slowTimeout * 2, onTimeout: () => WebIntelResult(identifier: web, status: WebStatus.unavailable, checkedAt: DateTime.now()));
+    for (final l in steps) {
+      if (l.step.status == StepStatus.running) {
+        l.step
+          ..result = 'No answer in time, skipped'
+          ..status = StepStatus.failed;
+      }
+    }
+    redraw();
+    _done++;
+    _last = steps.where((l) => l.step.tool == webTool).firstOrNull ?? _last;
+    _emit(TraceProgressEvent(_done, _total));
+    _fact(nodeId, 'Web reports', r.headline);
+
+    for (final s in r.sources.take(5)) {
+      final when = '${shortDate(r.checkedAt)}${r.fromCache ? ' (saved result)' : ''}';
+      _node(TraceKind.webReport, s.url, '${s.confirmed ? 'Report' : 'Possible report'} on ${s.domain}',
+          parent: nodeId, edge: s.confirmed ? 'reported on' : 'mentioned on', flagged: s.confirmed, facts: [
+        ('Site', s.domain),
+        ('Page title', s.title),
+        if (s.snippet.isNotEmpty) ('What it says', s.snippet),
+        ('Link', s.url),
+        ('Found via', s.foundVia),
+        ('How it was checked', s.evidenceLabel),
+        ('Searched', when),
+      ]);
+    }
+    final sites = r.confirmedDomains;
+    if (r.reported) {
+      _flag('Reported online as a scam', '${web.display} appears next to scam warnings on ${sites.length} public site${sites.length == 1 ? '' : 's'}: ${sites.take(3).join(', ')}.',
+          sites.length >= 2 ? 45 : 30,
+          nodeId: nodeId);
+    } else if (r.status == WebStatus.possible) {
+      _flag('Possible scam reports online', 'Search results mention ${web.display} with scam words, but Kantoi could not open the pages to confirm.', 8, nodeId: nodeId);
+    }
   }
 
   // ------------------------------------------------------------ helpers
