@@ -9,6 +9,7 @@ import '../engine/attribution/intel_models.dart';
 import '../engine/attribution/intel_store.dart';
 import '../engine/forensics/tls_probe.dart';
 import '../engine/sitecheck/site_check.dart' show SiteChecker;
+import '../engine/trace/agent_model.dart' show GeminiAgentModel;
 import '../engine/trace/trace_models.dart';
 import '../engine/trace/tracer.dart' show Tracer;
 import '../engine/webintel/web_intel.dart' show WebIntel;
@@ -69,6 +70,10 @@ class _IntelPageState extends State<IntelPage> {
   DateTime? _pausedAt;
   Duration _pausedFor = Duration.zero;
   bool _showLog = false;
+  /// Let the AI investigator lead traces (needs a Gemini key).
+  bool _useAgent = true;
+
+  bool get _agentAvailable => GeminiAgentModel.supports(appState.llm);
 
   bool get _running => _s != null && !_s!.finished;
 
@@ -147,6 +152,9 @@ class _IntelPageState extends State<IntelPage> {
       // What each website is for (page words, then Gemini on the page text
       // when a key is set) and its top-sites rank.
       siteChecker: SiteChecker(client: client, llm: appState.llm, keys: appState.keys),
+      // The AI investigator chooses each next lookup; without it the
+      // standard trace runs every lookup in a fixed order.
+      agent: _useAgent && _agentAvailable ? GeminiAgentModel(appState.llm, client: client) : null,
       // A short beat between lookups so each step can be followed on the map.
       pace: const Duration(milliseconds: 250),
     );
@@ -277,6 +285,24 @@ class _IntelPageState extends State<IntelPage> {
             icon: const Icon(Icons.radar_rounded),
             label: Text(_s == null ? 'Start trace' : 'Start new trace'),
           ),
+          const SizedBox(height: 4),
+          if (_agentAvailable)
+            SwitchListTile(
+              key: const ValueKey('trace-agent-switch'),
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: _useAgent,
+              onChanged: (v) => setState(() => _useAgent = v),
+              secondary: const Icon(Icons.psychology_rounded, color: K.primary),
+              title: const Text('AI investigator'),
+              subtitle: const Text('Gemini decides what to check next from what each lookup finds'),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('Add a Gemini key in Settings to let the AI investigator lead the trace.',
+                  style: Theme.of(context).textTheme.bodySmall),
+            ),
         ]),
       );
 
@@ -296,6 +322,8 @@ class _IntelPageState extends State<IntelPage> {
           how(Icons.category_outlined, K.amber,
               'Reads what a website is for (gambling, "guaranteed returns", loans, fake logins) and how the internet rates it: top-sites rank, age and web reports.'),
           how(Icons.hub_outlined, K.primary, 'Draws every server, nameserver, certificate and country it finds, live.'),
+          how(Icons.psychology_rounded, K.primary,
+              'With a Gemini key, an AI investigator leads: it picks each next lookup from what the last one found and explains why.'),
           const SizedBox(height: 6),
           Text('Passive lookups only: Kantoi never scans, logs in to or attacks anything.', style: t.bodySmall),
         ]),
@@ -385,6 +413,10 @@ class _IntelPageState extends State<IntelPage> {
       ]),
       const SizedBox(height: 4),
       Text('Tap a dot to inspect it. Pinch to zoom, drag to move.', style: t.bodySmall),
+      if (s.agent || s.thoughts.isNotEmpty || s.agentNotes.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        TraceAgentCard(state: s),
+      ],
       const SizedBox(height: 12),
       TraceEntityCard(state: s),
       const SizedBox(height: 12),
@@ -422,7 +454,7 @@ class _IntelPageState extends State<IntelPage> {
           child: OutlinedButton.icon(
             onPressed: () => exportTracePdf(context, s),
             icon: const Icon(Icons.picture_as_pdf_outlined),
-            label: const Text('Police PDF'),
+            label: const Text('Report PDF'),
           ),
         ),
       ]),

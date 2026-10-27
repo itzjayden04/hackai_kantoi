@@ -40,6 +40,12 @@ class LimitsPage extends StatelessWidget {
       'Only claims that quote the message word for word are kept, so the AI cannot invent evidence. It can still miss things or be unavailable.',
     ),
     (
+      'AI investigator (Trace tab)',
+      'With a Gemini key, an AI picks which public lookups to run and explains why. It can only follow leads the lookups found, gets the item with '
+          'personal details masked, and its verdict can raise the risk level by one step at most, never lower it. It needs the internet, takes about '
+          '20 to 60 seconds, and can still choose poorly or stop early; the standard checks then cover anything it skipped. Not measured on real scams yet.',
+    ),
+    (
       'Relationship check',
       'Looks for script patterns, texting rhythm, story changes and writing-style changes. Short chats give less certain results. Not measured on real chats yet.',
     ),

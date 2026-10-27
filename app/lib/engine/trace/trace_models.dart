@@ -121,7 +121,9 @@ sealed class TraceEvent {
 class TraceStarted extends TraceEvent {
   final String target;
   final String kind;
-  const TraceStarted(this.target, this.kind);
+  /// The AI investigator leads this trace.
+  final bool agent;
+  const TraceStarted(this.target, this.kind, {this.agent = false});
 }
 
 /// A node was added, or new facts were found for it.
@@ -158,6 +160,52 @@ class TraceProgressEvent extends TraceEvent {
   const TraceProgressEvent(this.done, this.total);
 }
 
+/// The AI investigator chose a lookup (or was refused one).
+class TraceThoughtEvent extends TraceEvent {
+  final TraceThought thought;
+  const TraceThoughtEvent(this.thought);
+}
+
+/// The AI investigator's conclusion.
+class TraceConclusionEvent extends TraceEvent {
+  final TraceConclusion conclusion;
+  const TraceConclusionEvent(this.conclusion);
+}
+
+/// Something the user should know about the AI investigator, e.g. that it
+/// was unavailable and the standard trace ran instead.
+class TraceAgentNoteEvent extends TraceEvent {
+  final String note;
+  const TraceAgentNoteEvent(this.note);
+}
+
+/// One step the AI investigator chose, and why.
+class TraceThought {
+  final int step;
+
+  /// What it did, in plain words ("Follow the link").
+  final String tool;
+  final String target;
+  final String why;
+
+  /// Not run: the item was not found by this investigation.
+  final bool refused;
+  final DateTime at;
+  TraceThought(this.step, this.tool, this.target, this.why, {this.refused = false}) : at = DateTime.now();
+}
+
+/// The AI investigator's verdict. It can raise the trace's risk level by one
+/// step at most and can never lower it (see [TraceState.level]).
+class TraceConclusion {
+  final RiskLevel level;
+  final String scamType;
+  final String summary;
+  final List<String> findings;
+  final String nextStep;
+  final String model;
+  const TraceConclusion(this.level, this.scamType, this.summary, this.findings, this.nextStep, this.model);
+}
+
 class TraceFinished extends TraceEvent {
   final bool cancelled;
   const TraceFinished({this.cancelled = false});
@@ -176,6 +224,11 @@ class TraceState {
   int done = 0;
   int total = 0;
   bool started = false;
+  /// The AI investigator leads this trace.
+  bool agent = false;
+  final List<TraceThought> thoughts = [];
+  TraceConclusion? conclusion;
+  final List<String> agentNotes = [];
   bool finished = false;
   bool cancelled = false;
   DateTime? startedAt;
@@ -183,9 +236,10 @@ class TraceState {
 
   void apply(TraceEvent e) {
     switch (e) {
-      case TraceStarted(:final target, :final kind):
+      case TraceStarted(:final target, :final kind, :final agent):
         this.target = target;
         this.kind = kind;
+        this.agent = agent;
         started = true;
         startedAt = DateTime.now();
       case TraceNodeEvent(:final node):
@@ -200,6 +254,12 @@ class TraceState {
         sites
           ..removeWhere((x) => x.domain == site.domain)
           ..add(site);
+      case TraceThoughtEvent(:final thought):
+        thoughts.add(thought);
+      case TraceConclusionEvent(:final conclusion):
+        this.conclusion = conclusion;
+      case TraceAgentNoteEvent(:final note):
+        agentNotes.add(note);
       case TraceProgressEvent(:final done, :final total):
         this.done = done;
         this.total = total;
@@ -231,12 +291,26 @@ class TraceState {
     return s;
   }
 
-  RiskLevel get level => traceLevel(score);
+  /// The level from the signs the lookups found.
+  RiskLevel get rulesLevel => traceLevel(score);
+
+  /// The level shown. The AI investigator's conclusion can raise it by one
+  /// step at most and can never lower it, so the AI alone cannot make a
+  /// harmless item look dangerous or a flagged one look safe.
+  RiskLevel get level {
+    final r = rulesLevel;
+    final c = conclusion;
+    if (c == null || c.level.index <= r.index) return r;
+    return RiskLevel.values[r.index + 1];
+  }
+
+  /// The AI investigator raised the level.
+  bool get raisedByAi => level != rulesLevel;
 
   /// A strong reassuring sign, such as an official or well-known website.
   bool get trusted => flags.any((f) => f.weight <= -10);
 
-  String get riskLabel => traceRiskLabel(score, trusted: trusted);
+  String get riskLabel => raisedByAi ? traceLevelLabel(level) : traceRiskLabel(score, trusted: trusted);
 
   /// The website the trace is mostly about: the riskiest, else the last.
   SiteReport? get mainSite {
@@ -268,6 +342,13 @@ String traceRiskLabel(int score, {bool trusted = false}) => switch (traceLevel(s
       RiskLevel.suspicious => 'Elevated',
       RiskLevel.caution => 'Some signs',
       RiskLevel.safe => trusted ? 'Low risk' : (score > 0 ? 'Low' : 'No signs yet'),
+    };
+
+String traceLevelLabel(RiskLevel l) => switch (l) {
+      RiskLevel.danger => 'High',
+      RiskLevel.suspicious => 'Elevated',
+      RiskLevel.caution => 'Some signs',
+      RiskLevel.safe => 'Low',
     };
 
 const countryNames = {

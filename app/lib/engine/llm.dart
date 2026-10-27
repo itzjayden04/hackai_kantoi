@@ -67,15 +67,15 @@ class LlmClient {
 
   Future<String> _gemini(String system, String user, List<int>? img, String mime, Duration timeout) async {
     final model = config.model.isEmpty ? 'gemini-flash-latest' : config.model;
-    final uri = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent');
     final parts = <Map<String, dynamic>>[
       {'text': user},
       if (img != null) {'inline_data': {'mime_type': mime, 'data': base64Encode(img)}},
     ];
-    final res = await _http
-        .post(uri,
-            headers: {'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey},
-            body: jsonEncode({
+    final res = await postGemini(_http,
+        apiKey: config.apiKey,
+        model: model,
+        timeout: timeout,
+        body: jsonEncode({
               'system_instruction': {
                 'parts': [{'text': system}]
               },
@@ -83,8 +83,7 @@ class LlmClient {
                 {'role': 'user', 'parts': parts}
               ],
               'generationConfig': {'temperature': 0.2, 'responseMimeType': 'application/json'},
-            }))
-        .timeout(timeout);
+            }));
     if (res.statusCode != 200) throw LlmError('Gemini error ${res.statusCode}: ${_short(res.body)}');
     final j = jsonDecode(res.body) as Map<String, dynamic>;
     final cands = j['candidates'] as List? ?? [];
@@ -101,12 +100,7 @@ class LlmClient {
   Future<GroundedReply> groundedSearch(String prompt, {Duration timeout = const Duration(seconds: 10)}) async {
     if (config.kind != LlmKind.gemini || config.apiKey.isEmpty) throw LlmError('Google Search grounding needs a Gemini key');
     final model = config.model.isEmpty ? 'gemini-flash-latest' : config.model;
-    final uri = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent');
-    final res = await _http
-        .post(uri,
-            headers: {'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey},
-            body: jsonEncode(groundedRequestBody(prompt)))
-        .timeout(timeout);
+    final res = await postGemini(_http, apiKey: config.apiKey, model: model, timeout: timeout, body: jsonEncode(groundedRequestBody(prompt)));
     if (res.statusCode != 200) throw LlmError('Gemini error ${res.statusCode}: ${_short(res.body)}', status: res.statusCode);
     final j = jsonDecode(res.body) as Map<String, dynamic>;
     final cands = j['candidates'] as List? ?? [];
@@ -186,6 +180,30 @@ class LlmClient {
   static String _short(String s) => s.length > 200 ? '${s.substring(0, 200)}…' : s;
 
   void close() => _http.close();
+}
+
+/// The lighter Gemini model, tried when the main one is too busy.
+const geminiBackupModel = 'gemini-flash-lite-latest';
+
+/// For tests: the pause before asking a busy Gemini again.
+Duration geminiRetryPause = const Duration(seconds: 2);
+
+/// Posts to Gemini's generateContent. Gemini sometimes answers 503 ("high
+/// demand") or 500 for a moment, so a busy answer is tried once more after a
+/// short pause, then once on the lighter backup model.
+Future<http.Response> postGemini(http.Client client,
+    {required String apiKey, required String model, required String body, required Duration timeout}) async {
+  Future<http.Response> send(String m) => client
+      .post(Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent'),
+          headers: {'Content-Type': 'application/json', 'x-goog-api-key': apiKey}, body: body)
+      .timeout(timeout);
+  bool busy(http.Response r) => r.statusCode == 503 || r.statusCode == 500;
+  var res = await send(model);
+  if (!busy(res)) return res;
+  await Future<void>.delayed(geminiRetryPause);
+  res = await send(model);
+  if (!busy(res) || model == geminiBackupModel) return res;
+  return send(geminiBackupModel);
 }
 
 class GroundedReply {

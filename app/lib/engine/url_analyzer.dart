@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'punycode.dart';
 import 'forensics/homoglyphs.dart' show foldConfusables;
+import 'forensics/net_guard.dart';
 
 import 'models.dart';
 
@@ -88,6 +89,24 @@ const _multiPartSuffixes = {
   'com.my', 'gov.my', 'edu.my', 'org.my', 'net.my', 'name.my', 'mil.my', 'co.uk', 'org.uk', 'com.sg',
   'gov.sg', 'edu.sg', 'com.au', 'co.id', 'com.cn', 'com.hk', 'co.th', 'com.ph', 'co.jp', 'co.in', 'com.vn',
 };
+
+/// Free hosting and site builders where every customer gets a subdomain.
+const _userHosting = {
+  'web.app', 'firebaseapp.com', 'vercel.app', 'netlify.app', 'github.io', 'pages.dev', 'blogspot.com',
+  'wixsite.com', 'weebly.com', '000webhostapp.com', 'herokuapp.com', 'glitch.me', 'ngrok-free.app',
+  'workers.dev', 'square.site', 'webflow.io', 'framer.website', 'my.id', 'carrd.co', 'wordpress.com',
+  'notion.site', 'gitbook.io', 'onrender.com', 'fly.dev', 'replit.app', 'azurewebsites.net', 'appspot.com',
+  'r2.dev', 'myshopify.com', 'godaddysites.com', 'mystrikingly.com', 'business.site', 'linkr.bio', 'bio.link',
+};
+
+/// Link shorteners, free hosting and link-in-bio sites: anyone can make a
+/// link or page on them, so how popular the platform is says nothing about
+/// one link on it.
+bool anyoneCanPublishOn(String host) {
+  final h = host.toLowerCase();
+  final reg = registrableDomain(h);
+  return _shorteners.contains(h) || _shorteners.contains(reg) || _userHosting.contains(reg);
+}
 
 String registrableDomain(String host) {
   final parts = host.split('.');
@@ -188,6 +207,8 @@ Future<UrlAnalysis> analyzeUrl(
     try {
       var current = uri;
       for (var i = 0; i < 8; i++) {
+        // Never follow a link or redirect into the phone's own network.
+        await ensurePublicHost(current);
         final req = http.Request('GET', current)
           ..followRedirects = false
           ..headers['User-Agent'] =
@@ -207,6 +228,16 @@ Future<UrlAnalysis> analyzeUrl(
       finalUri = current;
       s
         ..result = hops.length > 1 ? '${hops.length - 1} redirect(s), ends at ${finalUri.host}' : 'No redirects'
+        ..status = StepStatus.done;
+    } on BlockedAddress catch (e) {
+      // Stay on the last public hop; the blocked one is shown but not opened.
+      finalUri = hops.length > 1 ? Uri.parse(hops[hops.length - 2].url) : uri;
+      add(CueCategory.link, 'Points into your own network',
+          'The link${hops.length > 1 ? ' redirects to' : ' goes to'} ${e.address}, ${e.reason}. Real websites never do this; '
+              'it can be a trick to reach your router or other devices. Kantoi did not open it.',
+          16);
+      s
+        ..result = 'Stopped: ${e.plain}'
         ..status = StepStatus.done;
     } catch (e) {
       s

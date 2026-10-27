@@ -55,6 +55,23 @@ String traceSummaryText(TraceState s) {
     ..writeln('Warning level: ${s.riskLabel} (${s.score}/100 from the signs below)')
     ..writeln('Countries: ${s.countries.isEmpty ? 'none found' : s.countries.map(countryName).join(', ')}')
     ..writeln();
+  final c = s.conclusion;
+  if (c != null) {
+    b.writeln('AI investigator (${c.model}): ${traceLevelLabel(c.level)}, ${c.scamType}');
+    b.writeln('  ${c.summary}');
+    for (final f in c.findings) {
+      b.writeln('  - $f');
+    }
+    if (c.nextStep.isNotEmpty) b.writeln('  Next step: ${c.nextStep}');
+    b.writeln();
+  }
+  if (s.thoughts.isNotEmpty) {
+    b.writeln('Steps the AI investigator chose:');
+    for (final th in s.thoughts) {
+      b.writeln('${th.step}. ${th.tool}: ${th.target}${th.refused ? ' (refused, not a lead)' : ' - ${th.why}'}');
+    }
+    b.writeln();
+  }
   for (final site in s.sites) {
     b.writeln('Website purpose and reputation:');
     for (final (k, v) in siteRows(site)) {
@@ -142,6 +159,19 @@ Future<Uint8List> buildTracePdf(TraceState s, {DateTime? now}) async {
           ('Countries', s.countries.isEmpty ? 'None found' : s.countries.map(countryName).join(', ')),
         ]),
       ]),
+      if (s.conclusion case final c?)
+        section('AI investigator', [
+          table([
+            ('Verdict', '${traceLevelLabel(c.level)}: ${c.scamType}'),
+            ('Summary', c.summary),
+            if (c.findings.isNotEmpty) ('Key findings', c.findings.join('\n')),
+            if (c.nextStep.isNotEmpty) ('Next step', c.nextStep),
+            ('Model', c.model),
+          ]),
+          for (final th in s.thoughts)
+            p('${th.step}. ${th.tool}: ${th.target}${th.refused ? ' (refused, not a lead)' : ' - ${th.why}'}', style: muted),
+          p('The AI can raise the warning level by one step at most and can never lower it.', style: muted),
+        ]),
       for (final site in s.sites) section('Website purpose and reputation: ${site.domain}', [table(siteRows(site))]),
       if (s.flags.isNotEmpty)
         section('Signs found', [

@@ -10,3 +10,11 @@ app/windows/
 app/macos/
 app/web/
 app/ios/
+
+# Release signing key: never commit
+key.properties
+*.jks
+*.keystore
+
+# Local API keys for flutter run --dart-define-from-file (never commit)
+secrets.json

@@ -17,7 +17,7 @@ import '../forensics/reputation.dart';
 import '../forensics/safe_fetch.dart';
 import '../llm.dart';
 import '../models.dart';
-import '../url_analyzer.dart' show StepLogger, officialBrandFor, registrableDomain;
+import '../url_analyzer.dart' show StepLogger, anyoneCanPublishOn, officialBrandFor, registrableDomain;
 import '../webintel/grounding.dart' show groundedVia;
 import '../webintel/web_intel.dart';
 import 'purpose.dart';
@@ -519,7 +519,14 @@ class SiteChecker {
 
     var checked = false;
     int? rank;
-    if (network && officialBrandFor(host) == null) {
+    // A shortener or free host is popular because everyone uses it, scammers too.
+    final openPlatform = anyoneCanPublishOn(host);
+    if (network && openPlatform && officialBrandFor(host) == null) {
+      log(popularityTool, 'Asking the Tranco top-sites list how popular $domain is')
+        ..result = 'Skipped: anyone can make links or pages on $domain, so its popularity says nothing about this one'
+        ..status = StepStatus.skipped;
+    }
+    if (network && !openPlatform && officialBrandFor(host) == null) {
       final ts = log(popularityTool, 'Asking the Tranco top-sites list how popular $domain is', sentOffDevice: true);
       onChange?.call();
       try {
@@ -544,7 +551,11 @@ class SiteChecker {
     WebIntelResult? web;
     final w = webIntel;
     if (w != null && network && webSearch) {
-      if (officialBrandFor(host) != null || (rank != null && rank <= wellKnownRank)) {
+      if (openPlatform) {
+        log(webTool, 'Searching the web for reports about $domain')
+          ..result = 'Skipped: anyone can make links or pages on $domain, so pages about it are not about this link'
+          ..status = StepStatus.skipped;
+      } else if (officialBrandFor(host) != null || (rank != null && rank <= wellKnownRank)) {
         log(webTool, 'Searching the web for reports about $domain')
           ..result = 'Skipped: a well-known site (pages about it are usually warnings about fakes, not about the site itself)'
           ..status = StepStatus.skipped;

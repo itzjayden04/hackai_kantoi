@@ -39,20 +39,33 @@ class GuardService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onCreate() {
-        super.onCreate()
+    /**
+     * Shows "Kantoi is protecting this phone". Android requires this soon after
+     * every startForegroundService() call, not only the first one, or it
+     * stops the app, so both onCreate and onStartCommand call it.
+     */
+    private fun goForeground(): Boolean {
         val n = Notifier.running(this)
-        try {
+        return try {
             if (Build.VERSION.SDK_INT >= 34) {
                 startForeground(Notifier.RUNNING_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
             } else {
                 startForeground(Notifier.RUNNING_ID, n)
             }
+            true
         } catch (e: Exception) {
+            false
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        if (!goForeground()) {
             // Android refused (e.g. started from the background); try again next time.
             stopSelf()
             return
         }
+        running = true
         GuardEngine.warm(this)
         val f = IntentFilter(Intent.ACTION_PACKAGE_ADDED).apply { addDataScheme("package") }
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(packages, f, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(packages, f)
@@ -60,7 +73,9 @@ class GuardService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!GuardEngine.isEnabled(this)) {
+        // Answer this start request first, even when about to stop.
+        val ok = goForeground()
+        if (!ok || !GuardEngine.isEnabled(this)) {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -69,6 +84,7 @@ class GuardService : Service() {
     }
 
     override fun onDestroy() {
+        running = false
         try {
             unregisterReceiver(packages)
         } catch (e: Exception) {
@@ -196,7 +212,12 @@ class GuardService : Service() {
     }
 
     companion object {
+        /** True while the service is up, so opening the app does not start it again. */
+        @Volatile
+        var running = false
+
         fun start(ctx: Context) {
+            if (running) return
             val i = Intent(ctx, GuardService::class.java)
             try {
                 if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i) else ctx.startService(i)

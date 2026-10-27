@@ -30,7 +30,9 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         pending = readShare(intent)
         pendingTrace = readTrace(intent)
-        if (GuardEngine.isEnabled(this)) GuardService.start(this)
+        // Start protection once the app has drawn its first screen, not during
+        // start-up, when a slow phone may miss Android's deadline for it.
+        window.decorView.postDelayed({ if (GuardEngine.isEnabled(this)) GuardService.start(this) }, 1500)
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "kantoi/share").apply {
             setMethodCallHandler { call, result ->
                 if (call.method == "initial") {

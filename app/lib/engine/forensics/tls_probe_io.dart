@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'net_guard.dart';
 import 'tls_info.dart';
 
 const tlsProbeSupported = true;
@@ -9,6 +10,8 @@ const tlsProbeSupported = true;
 Future<TlsInfo?> probeTls(String host, {Duration timeout = const Duration(seconds: 5)}) async {
   X509Certificate? bad;
   SecureSocket? socket;
+  // Only public websites: never open a connection into the local network.
+  await ensurePublicHost(Uri(scheme: 'https', host: host));
   try {
     socket = await SecureSocket.connect(host, 443, timeout: timeout, onBadCertificate: (c) {
       bad = c;

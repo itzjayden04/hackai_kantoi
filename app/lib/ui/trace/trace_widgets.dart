@@ -82,7 +82,9 @@ class TraceHud extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = state;
     final running = !s.finished;
-    final status = s.finished ? (s.cancelled ? 'Trace stopped' : 'Trace complete') : (paused ? 'Trace paused' : 'Live forensic trace');
+    final status = s.finished
+        ? (s.cancelled ? 'Trace stopped' : 'Trace complete')
+        : (paused ? 'Trace paused' : (s.agent ? 'AI investigator at work' : 'Live forensic trace'));
     final statusColor = s.finished ? K.green : (paused ? K.amber : K.red);
     final lvl = riskColor(s.level);
     const muted = TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.4, color: Color(0xFF94A3B8));
@@ -136,6 +138,136 @@ class TraceHud extends StatelessWidget {
         ]),
       ]),
     );
+  }
+}
+
+// ---------------------------------------------------------------- AI investigator
+
+/// What the AI investigator chose to check, why, and what it concluded.
+class TraceAgentCard extends StatelessWidget {
+  final TraceState state;
+  const TraceAgentCard({super.key, required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final s = state;
+    final c = s.conclusion;
+    final working = s.agent && !s.finished && c == null && s.agentNotes.isEmpty;
+    return KCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const Icon(Icons.psychology_rounded, color: K.primary),
+          const SizedBox(width: 8),
+          Expanded(child: Text('AI investigator', style: t.titleMedium)),
+          if (working) const PulseDot(color: K.primary, size: 8),
+        ]),
+        const SizedBox(height: 4),
+        Text(
+            'Chooses each next lookup from what the last one found. Passive lookups only, personal details masked, '
+            'and it may only follow leads the lookups actually found.',
+            style: t.bodySmall),
+        const Divider(height: 20),
+        if (s.thoughts.isEmpty && working) Text('Planning the investigation…', style: t.bodySmall),
+        for (final th in s.thoughts) _ThoughtRow(th),
+        for (final n in s.agentNotes)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.info_outline_rounded, size: 16, color: K.amber),
+              const SizedBox(width: 8),
+              Expanded(child: Text(n, style: t.bodySmall)),
+            ]),
+          ),
+        if (c != null) ...[
+          const Divider(height: 24),
+          _Conclusion(c, raised: s.raisedByAi),
+        ],
+      ]),
+    );
+  }
+}
+
+class _ThoughtRow extends StatelessWidget {
+  final TraceThought th;
+  const _ThoughtRow(this.th);
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final c = th.refused ? K.outline : K.primary;
+    return Reveal(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: c.withValues(alpha: 0.12), shape: BoxShape.circle),
+            child: Text('${th.step}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: c)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(th.refused ? '${th.tool} (refused)' : th.tool, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: c)),
+              Text(th.target, maxLines: 1, overflow: TextOverflow.ellipsis, style: traceMono.copyWith(fontSize: 12, color: K.onSurfaceVariant)),
+              const SizedBox(height: 2),
+              Text(th.refused ? 'Not a lead from this investigation, so Kantoi did not look it up.' : th.why,
+                  style: t.bodyMedium?.copyWith(fontStyle: FontStyle.italic)),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _Conclusion extends StatelessWidget {
+  final TraceConclusion c;
+  final bool raised;
+  const _Conclusion(this.c, {required this.raised});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [
+        Text('Conclusion', style: t.titleSmall),
+        const SizedBox(width: 8),
+        Pill(traceLevelLabel(c.level), color: riskColor(c.level)),
+        const SizedBox(width: 8),
+        Expanded(child: Text(c.scamType, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.labelLarge)),
+      ]),
+      const SizedBox(height: 8),
+      Text(c.summary, style: t.bodyMedium),
+      if (c.findings.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        for (final f in c.findings)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Padding(padding: EdgeInsets.only(top: 6), child: Icon(Icons.circle, size: 6, color: K.onSurfaceVariant)),
+              const SizedBox(width: 8),
+              Expanded(child: Text(f, style: t.bodyMedium)),
+            ]),
+          ),
+      ],
+      if (c.nextStep.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.arrow_forward_rounded, size: 18, color: K.primary),
+          const SizedBox(width: 8),
+          Expanded(child: Text(c.nextStep, style: t.bodyMedium?.copyWith(fontWeight: FontWeight.w700))),
+        ]),
+      ],
+      const SizedBox(height: 10),
+      Text(
+          '${raised ? 'The AI raised the risk level one step. ' : ''}'
+          "The AI's verdict can raise the risk level by one step at most and can never lower it; the signs the lookups found decide the rest. "
+          'Conclusion by ${c.model}.',
+          style: t.bodySmall),
+    ]);
   }
 }
 
@@ -463,6 +595,10 @@ class TraceFindingsPage extends StatelessWidget {
                 style: t.bodyMedium),
           ]),
         ),
+        if (s.agent || s.thoughts.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          TraceAgentCard(state: s),
+        ],
         for (final site in s.sites.reversed) ...[
           const SizedBox(height: 12),
           SiteSummaryCard(site: site),
@@ -520,7 +656,7 @@ class TraceFindingsPage extends StatelessWidget {
         SectionTitle('Lookup log (${s.lookups.length})'),
         KCard(child: Column(children: [for (final l in s.lookups) TraceLookupRow(lookup: l)])),
         const SizedBox(height: 16),
-        FilledButton.icon(onPressed: () => exportTracePdf(context, s), icon: const Icon(Icons.picture_as_pdf_outlined), label: const Text('Police report PDF')),
+        FilledButton.icon(onPressed: () => exportTracePdf(context, s), icon: const Icon(Icons.picture_as_pdf_outlined), label: const Text('Report PDF')),
         const SizedBox(height: 8),
         OutlinedButton.icon(onPressed: () => shareTraceText(context, s), icon: const Icon(Icons.share_outlined), label: const Text('Share as text')),
         const SizedBox(height: 12),
