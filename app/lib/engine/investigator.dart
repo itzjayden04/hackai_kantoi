@@ -386,7 +386,12 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
 
   String scamType = (ai?['scam_type'] as String?)?.trim() ??
       extras?.scamType ??
-      (level == RiskLevel.safe && legitimateHeadline(f) != null ? 'Legitimate message' : _guessType(byCat, urls, legit < 0));
+      (level == RiskLevel.safe && legitimateHeadline(f) != null
+          ? 'Legitimate message'
+          // Warning signs outweighed by good ones: not a known scam pattern, but not clean either.
+          : level == RiskLevel.safe && byCat.isNotEmpty
+              ? 'Unclear'
+              : _guessType(byCat, urls, legit < 0));
   if (scamType.isEmpty) scamType = 'Unclear';
   if (sitePurpose != null && const {'Unclear', 'Legitimate message', 'Suspicious message', 'Prize scam'}.contains(scamType)) {
     scamType = scamTypeFor(sitePurpose);
@@ -417,7 +422,7 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
       ? "Don't reply, call back or send money. Block this ${reported.first.identifier.kindLabel}. If you already paid, call 997 (National Scam Response Centre) at once."
       : (ai?['safe_next_step'] as String?)?.trim().isNotEmpty == true
       ? ai!['safe_next_step'] as String
-      : _defaultNext(level, byCat, urls, legit < 0);
+      : _defaultNext(level, byCat, urls, legit < 0 && byCat.isEmpty);
 
   final change = <String>[
     ...((ai?['what_would_change'] as List?)?.map((e) => e.toString()) ?? const <String>[]),

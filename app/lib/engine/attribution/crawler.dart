@@ -12,6 +12,7 @@ import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 
+import '../forensics/net_guard.dart';
 import '../models.dart';
 import '../url_analyzer.dart' show StepLogger;
 import 'fingerprint.dart';
@@ -301,6 +302,7 @@ Future<String> fetchText(http.Client c, Uri u, {Map<String, String> headers = co
 
 Future<Uint8List> fetchBytes(http.Client c, Uri u, {Map<String, String> headers = const {}, int maxBytes = 3 << 20, Duration timeout = _timeout}) async {
   if (!crawlAllowed(u)) throw StateError('Government website, not crawled');
+  await ensurePublicHost(u);
   final req = http.Request('GET', u)
     ..followRedirects = true
     ..maxRedirects = 4
@@ -325,6 +327,7 @@ Future<bool> robotsOk(http.Client c, Uri page, Map<String, List<(bool, String)>>
   var rules = cache[origin];
   if (rules == null) {
     try {
+      await ensurePublicHost(page);
       final req = http.Request('GET', Uri.parse('$origin/robots.txt'))..headers['User-Agent'] = crawlerAgent;
       final res = await c.send(req).timeout(const Duration(seconds: 6));
       final body = await res.stream.bytesToString().timeout(const Duration(seconds: 6));

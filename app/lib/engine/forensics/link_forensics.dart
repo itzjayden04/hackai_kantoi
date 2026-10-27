@@ -46,6 +46,8 @@ Future<LinkForensics> deepLinkCheck(
   Duration urlscanFirstWait = const Duration(seconds: 10),
   /// Certificates are read over a raw socket, not through [client].
   bool probeCertificates = true,
+  /// For tests: how long to wait between VirusTotal scan checks.
+  List<Duration>? vtPollDelays,
 }) async {
   final findings = <Finding>[];
   void add(CueCategory c, String title, String why, int w, String tool) =>
@@ -102,7 +104,10 @@ Future<LinkForensics> deepLinkCheck(
   // 2. Reputation services, in parallel.
   final reputation = <ReputationHit>[];
   Future<void> reputationPart() async {
-    final hits = await checkReputation(base.finalUrl, keys: keys, client: client, log: log);
+    // Where the link ends gets the full VirusTotal check (website too, and a
+    // fresh scan when it is unknown); extra hops are only looked up.
+    final hits = await checkReputation(base.finalUrl,
+        keys: keys, client: client, log: log, vtDepth: VtDepth.full, quick: quick, onChange: changed, vtPollDelays: vtPollDelays);
     if (base.input != base.finalUrl && !base.finalUrl.contains(base.input)) {
       // Shortener links are listed too, so check the first hop as well.
       final first = base.hops.isEmpty ? base.input : base.hops.first.url;

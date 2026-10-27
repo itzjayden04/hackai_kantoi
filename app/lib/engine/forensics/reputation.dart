@@ -6,6 +6,9 @@ import 'package:http/http.dart' as http;
 import '../models.dart';
 import '../url_analyzer.dart' show StepLogger;
 import 'keys.dart';
+import 'virustotal.dart';
+
+export 'virustotal.dart';
 
 /// One reputation service's answer about a link.
 class ReputationHit {
@@ -45,19 +48,7 @@ String _threatWords(Set<String> t) => t
     .toSet()
     .join(', ');
 
-// ---------- VirusTotal (lookup by URL id, no submission) ----------
-
-/// VirusTotal's id for a URL: unpadded base64url of the URL.
-String virusTotalUrlId(String url) => base64Url.encode(utf8.encode(url)).replaceAll('=', '');
-
-/// (malicious, suspicious, harmless) engine counts, or null if unknown.
-(int, int, int)? parseVirusTotal(String body) {
-  final j = jsonDecode(body) as Map<String, dynamic>;
-  final s = j['data']?['attributes']?['last_analysis_stats'];
-  if (s is! Map) return null;
-  int n(String k) => (s[k] as num?)?.toInt() ?? 0;
-  return (n('malicious'), n('suspicious'), n('harmless'));
-}
+// VirusTotal lives in virustotal.dart (link, website, fresh scans, limits).
 
 // ---------- URLhaus (abuse.ch) ----------
 
@@ -75,11 +66,20 @@ String virusTotalUrlId(String url) => base64Url.encode(utf8.encode(url)).replace
 
 /// Checks [url] with every reputation service that has a key, in parallel.
 /// Only the link itself is sent, never the message.
+///
+/// [vtDepth] decides how much of VirusTotal is used (see [checkVirusTotal]);
+/// in [quick] mode VirusTotal never starts a scan that has to be waited for.
 Future<List<ReputationHit>> checkReputation(
   String url, {
   required ForensicKeys keys,
   required http.Client client,
   required StepLogger log,
+  VtDepth vtDepth = VtDepth.lookup,
+  bool quick = false,
+  void Function()? onChange,
+  VtLimiter? vtLimiter,
+  VtCache? vtCache,
+  List<Duration>? vtPollDelays,
 }) async {
   final host = Uri.tryParse(url)?.host ?? url;
   final hits = <ReputationHit>[];
@@ -115,21 +115,25 @@ Future<List<ReputationHit>> checkReputation(
       hits.add(ReputationHit('Google Safe Browsing', 'Google lists this link as ${_threatWords(t)}', 30));
       return 'Listed as ${_threatWords(t)}';
     }),
-    run('VirusTotal', 'Looking up $host in VirusTotal (by address only, nothing uploaded)', keys.virusTotal, (s) async {
-      final res = await client
-          .get(Uri.parse('https://www.virustotal.com/api/v3/urls/${virusTotalUrlId(url)}'), headers: {'x-apikey': keys.virusTotal})
-          .timeout(_timeout);
-      if (res.statusCode == 404) return 'VirusTotal has not seen this link before';
-      if (res.statusCode != 200) throw StateError('${res.statusCode}');
-      final r = parseVirusTotal(res.body);
-      if (r == null) return 'No result';
-      final (bad, sus, good) = r;
-      if (bad + sus > 0) {
-        hits.add(ReputationHit('VirusTotal', '$bad security vendor(s) flag this link as malicious${sus > 0 ? ', $sus as suspicious' : ''}',
-            bad >= 3 ? 24 : (bad >= 1 ? 14 : 6)));
+    () async {
+      if (keys.virusTotal.isEmpty) {
+        log('VirusTotal', 'Looking up $host in VirusTotal', sentOffDevice: false)
+          ..result = 'Skipped: no API key set (add one in Settings)'
+          ..status = StepStatus.skipped;
+        return;
       }
-      return '$bad malicious, $sus suspicious, $good clean';
-    }),
+      hits.addAll(await checkVirusTotal(url,
+          apiKey: keys.virusTotal,
+          client: client,
+          log: log,
+          depth: vtDepth,
+          quick: quick,
+          limiter: vtLimiter,
+          cache: vtCache,
+          pollDelays: vtPollDelays ?? const [Duration(seconds: 15), Duration(seconds: 12)],
+          timeout: _timeout,
+          onChange: onChange));
+    }(),
     run('URLhaus', 'Checking $host in the URLhaus list of malware links', keys.abuseCh, (s) async {
       final headers = {'Auth-Key': keys.abuseCh};
       var res = await client.post(Uri.parse('https://urlhaus-api.abuse.ch/v1/url/'), headers: headers, body: {'url': url}).timeout(_timeout);

@@ -82,7 +82,7 @@ Kantoi follows the eight branches of the product blueprint.
      - Every warning is a notification; tapping it opens the Trace.
 2. **Investigate it.**
    - **Words:** pressure words are highlighted, including Malay, Manglish, Chinese and Tamil. Kantoi also catches disguised spelling and says which step of a known scam script the message has reached.
-   - **Links:** every redirect is followed in a locked-down way, and each hop shows its domain age, certificate, hosting country, brand look-alike checks and the login form on the page. Kantoi also checks whether the page shows phone visitors something different, and looks the link up in safety lists.
+   - **Links:** every redirect is followed in a locked-down way, and each hop shows its domain age, certificate, hosting country, brand look-alike checks and the login form on the page. Kantoi also checks whether the page shows phone visitors something different, and looks the link up in safety lists. With a VirusTotal key, the link and its website are checked against 70+ security companies, and a link VirusTotal has never seen gets a fresh scan. Links that point into your own home or phone network are never opened.
    - **Files and apps:** risky app permissions, macros and links inside documents, and forged letterheads are flagged.
    - **Genuine messages:** an official-sender list and known-good templates let a real message come out as "Looks legitimate".
 3. **Relationship check.** It runs by itself when you open a chat (see the chat badge above). You can also score a WhatsApp or Telegram chat export, or answer 9 questions instead. The score looks at how you met, how fast money came up, texting rhythm, story contradictions and copy-paste replies. It also spots a hijacked friend's account, and shows a risk timeline with the key messages highlighted.
@@ -102,6 +102,7 @@ Kantoi follows the eight branches of the product blueprint.
 8. **Privacy you can see.**
    - **Activity log:** a lock icon marks steps that stayed on the device; a cloud icon marks steps that went online.
    - **Files:** only a file's fingerprint is ever checked online.
+   - **Links:** an unknown link may be sent to VirusTotal for a fresh scan (VirusTotal shares scans with its paying users), so phone, IC, card and account numbers and emails in the link are removed first.
    - **Retention:** data is kept for 7 or 30 days, and one button deletes everything.
    - **AI safety:** prompt-injection attempts are flagged as a scam sign.
 
@@ -112,7 +113,7 @@ The app works without these. Each one switches on one extra online check. Add th
 | Secret | Adds |
 | --- | --- |
 | `GEMINI_API_KEY` | AI explanations, screenshot reading, voice transcripts |
-| `VIRUSTOTAL_API_KEY` | Link and file-fingerprint reputation |
+| `VIRUSTOTAL_API_KEY` | Link, website and file-fingerprint reputation from 70+ security companies, plus fresh scans of unknown links (free key: 4 lookups a minute, which Kantoi stays within) |
 | `SAFE_BROWSING_API_KEY` | Google's phishing list |
 | `URLSCAN_API_KEY` | A screenshot of the scam page from a remote isolated browser |
 | `ABUSECH_AUTH_KEY` | URLhaus feed for the scam map and link checks |
@@ -145,3 +146,22 @@ flutter build apk
 The AI key is passed at build time with `--dart-define=GEMINI_API_KEY=...`. Without it the app still works using its built-in checks, and users can add their own key, or a local Ollama model, under Settings.
 
 Every push to `main` builds the APK in GitHub Actions. Pushing a tag such as `v1.0.0` publishes it as a release.
+
+### Release signing
+
+Release builds use `app/android/key.properties` when it exists and the debug key otherwise. To sign with your own key:
+
+```sh
+keytool -genkey -v -keystore app/android/app/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+```
+
+Then create `app/android/key.properties` (never commit it or the `.jks`):
+
+```
+storeFile=upload-keystore.jks
+storePassword=...
+keyAlias=upload
+keyPassword=...
+```
+
+In GitHub Actions, set the secrets `ANDROID_KEYSTORE_BASE64` (the `.jks` file, base64-encoded), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. A phone with a debug-signed Kantoi must uninstall it once before installing a build signed with the new key.

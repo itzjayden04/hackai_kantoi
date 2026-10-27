@@ -16,14 +16,19 @@ import '../attribution/intel_models.dart';
 import '../forensics/allowlist.dart' show matchSender;
 import '../forensics/hop_facts.dart' show parseIpRdap, parseIpWhoIs;
 import '../forensics/keys.dart';
+import '../forensics/net_guard.dart';
 import '../forensics/reputation.dart';
 import '../forensics/tls_info.dart';
 import '../models.dart';
+import '../redaction.dart' show PiiType, findPii, redact;
 import '../sitecheck/site_check.dart';
-import '../url_analyzer.dart' show StepLogger, analyzeUrl, brands, officialBrandFor, registrableDomain;
+import '../url_analyzer.dart' show StepLogger, analyzeUrl, anyoneCanPublishOn, brands, officialBrandFor, registrableDomain;
 import '../webintel/web_intel.dart';
+import 'agent_model.dart';
 import 'trace_input.dart';
 import 'trace_models.dart';
+
+part 'trace_agent.dart';
 
 const semakMuleUrl = 'https://semakmule.rmp.gov.my/';
 
@@ -53,6 +58,11 @@ class Tracer {
   final Set<String> ownDetails;
   /// Works out what a website is for and how the internet sees it.
   final SiteChecker? siteChecker;
+  /// The AI investigator. When set, it decides which lookup to run next;
+  /// without it (or when it fails) the standard trace runs.
+  final TraceAgentModel? agent;
+  /// The most lookups the AI investigator may run in one trace.
+  final int agentMaxLookups;
 
   Tracer({
     required this.client,
@@ -66,6 +76,8 @@ class Tracer {
     this.webIntel,
     this.ownDetails = const {},
     this.siteChecker,
+    this.agent,
+    this.agentMaxLookups = 10,
   });
 
   late final SiteChecker _site = siteChecker ?? SiteChecker(client: client, keys: keys, timeout: timeout);
@@ -78,6 +90,12 @@ class Tracer {
   bool _paused = false, _cancelled = false, _fullLogged = false;
   Completer<void>? _resume;
   TraceLookup? _last;
+  /// What each link and website lookup found so far, so later steps (and the
+  /// AI investigator) can build on it.
+  final Map<String, _UrlLead> _links = {};
+  final Map<String, _DomainCtx> _domains = {};
+  /// While an agent tool runs: the events it caused, for its answer.
+  List<TraceEvent>? _capture;
 
   bool get paused => _paused;
 
@@ -101,6 +119,7 @@ class Tracer {
   }
 
   void _emit(TraceEvent e) {
+    _capture?.add(e);
     if (!_out.isClosed) _out.add(e);
   }
 
@@ -118,7 +137,7 @@ class Tracer {
                   SeedKind.account => 'Bank account',
                   SeedKind.email => 'Email address',
                 };
-      _emit(TraceStarted(input.trim(), what));
+      _emit(TraceStarted(input.trim(), what, agent: agent != null && seeds.isNotEmpty));
       String? parent;
       if (parsed.message || seeds.isEmpty) {
         final preview = input.trim().replaceAll(RegExp(r'\s+'), ' ');
@@ -133,18 +152,15 @@ class Tracer {
           return 'Found ${n.entries.map((e) => '${e.value} ${_seedWord(e.key, e.value)}').join(', ')}';
         });
       }
-      for (final s in seeds) {
+      var todo = seeds;
+      if (agent != null && seeds.isNotEmpty) {
+        // The AI investigator leads; anything it did not get to is traced
+        // the standard way afterwards, so nothing is missed.
+        todo = await _AgentRun(this)._agentTrace(input, seeds, parent);
+      }
+      for (final s in todo) {
         if (_cancelled) break;
-        switch (s.kind) {
-          case SeedKind.url:
-            await _traceUrl(s.value, parent);
-          case SeedKind.phone:
-            await _tracePhone(s.value, parent);
-          case SeedKind.account:
-            await _traceAccount(s.value, parent);
-          case SeedKind.email:
-            await _traceEmail(s.value, parent);
-        }
+        await _traceSeed(s, parent);
       }
     } catch (_) {
       // A bug in one step must never leave the trace hanging.
@@ -152,6 +168,13 @@ class Tracer {
     _emit(TraceFinished(cancelled: _cancelled));
     await _out.close();
   }
+
+  Future<void> _traceSeed(TraceSeed s, String? parent) => switch (s.kind) {
+        SeedKind.url => _traceUrl(s.value, parent),
+        SeedKind.phone => _tracePhone(s.value, parent),
+        SeedKind.account => _traceAccount(s.value, parent),
+        SeedKind.email => _traceEmail(s.value, parent),
+      };
 
   static String _seedWord(String kind, int n) => switch (kind) {
         'url' => n == 1 ? 'link' : 'links',
@@ -244,6 +267,10 @@ class Tracer {
       l.step
         ..result = 'No answer within ${wait.inSeconds} s, skipped'
         ..status = StepStatus.failed;
+    } on BlockedAddress catch (e) {
+      l.step
+        ..result = 'Stopped: ${e.plain}'
+        ..status = StepStatus.failed;
     } catch (e) {
       l.step
         ..result = online ? 'Could not reach it (offline or blocked), skipped' : 'Could not check it, skipped'
@@ -266,10 +293,18 @@ class Tracer {
   // ------------------------------------------------------------ links
 
   Future<void> _traceUrl(String raw, String? parent) async {
+    final lead = await _linkChain(raw, parent);
+    if (lead == null) return;
+    await _linkReputation(lead);
+    await _linkSites(lead);
+  }
+
+  /// The address checks and the redirect chain of one link.
+  Future<_UrlLead?> _linkChain(String raw, String? parent) async {
     var text = raw.trim();
     if (!RegExp(r'^[a-z][a-z0-9+.-]*://', caseSensitive: false).hasMatch(text)) text = 'https://$text';
     final uri = Uri.tryParse(text);
-    if (uri == null || uri.host.isEmpty) return;
+    if (uri == null || uri.host.isEmpty) return null;
     final start = _node(TraceKind.url, uri.toString(), _short(uri), parent: parent, edge: 'contains link');
 
     var (brand, official) = await _lookalike(text, start);
@@ -297,36 +332,50 @@ class Tracer {
         }
       }
     }
+    final lead = _UrlLead(uri, start, last, hosts, hops, brand, official);
+    _links[uri.toString()] = lead;
+    _links.putIfAbsent(lead.finalUri.toString(), () => lead);
+    return lead;
+  }
 
-    // Reputation services, only when a key is set.
-    if (keys.safeBrowsing.isNotEmpty || keys.virusTotal.isNotEmpty || keys.abuseCh.isNotEmpty) {
-      final target = hops?.last.$1.toString() ?? uri.toString();
-      final steps = <TraceLookup>[];
-      _total++;
-      await _gate();
-      final hits = await checkReputation(target, keys: keys, client: client, log: (tool, action, {bool sentOffDevice = false}) {
-        final l = TraceLookup(_ids++, LogStep(tool: tool, action: action, sentOffDevice: sentOffDevice), last);
-        steps.add(l);
-        _emit(TraceLookupEvent(l));
-        return l.step;
-      }).timeout(slowTimeout, onTimeout: () => <ReputationHit>[]);
+  /// Reputation services for where the link ends up, only when a key is set.
+  Future<void> _linkReputation(_UrlLead lead) async {
+    if (keys.safeBrowsing.isEmpty && keys.virusTotal.isEmpty && keys.abuseCh.isEmpty) return;
+    final last = lead.last;
+    final target = lead.finalUri.toString();
+    final steps = <TraceLookup>[];
+    _total++;
+    await _gate();
+    // A fresh VirusTotal scan of an unknown link takes up to about half a minute.
+    final hits = await checkReputation(target, keys: keys, client: client, vtDepth: VtDepth.full, onChange: () {
       for (final s in steps) {
-        if (s.step.status == StepStatus.running) {
-          s.step
-            ..result = 'No answer in time, skipped'
-            ..status = StepStatus.failed;
-        }
         _emit(TraceLookupEvent(s));
       }
-      _done++;
-      _emit(TraceProgressEvent(_done, _total));
-      _repHits = hits;
-      for (final h in hits) {
-        _flag('Listed by ${h.service}', h.summary, h.weight, nodeId: last);
+    }, log: (tool, action, {bool sentOffDevice = false}) {
+      final l = TraceLookup(_ids++, LogStep(tool: tool, action: action, sentOffDevice: sentOffDevice), last);
+      steps.add(l);
+      _emit(TraceLookupEvent(l));
+      return l.step;
+    }).timeout(slowTimeout + const Duration(seconds: 30), onTimeout: () => <ReputationHit>[]);
+    for (final s in steps) {
+      if (s.step.status == StepStatus.running) {
+        s.step
+          ..result = 'No answer in time, skipped'
+          ..status = StepStatus.failed;
       }
+      _emit(TraceLookupEvent(s));
     }
+    _done++;
+    _emit(TraceProgressEvent(_done, _total));
+    _repHits = hits;
+    for (final h in hits) {
+      _flag('Listed by ${h.service}', h.summary, h.weight, nodeId: last);
+    }
+  }
 
-    // Each website in the chain.
+  /// Each website in the link's chain.
+  Future<void> _linkSites(_UrlLead lead) async {
+    final hops = lead.hops, hosts = lead.hosts, start = lead.start, last = lead.last;
     final domains = <String>[];
     for (final h in hosts) {
       if (_ipv4.hasMatch(h)) {
@@ -337,14 +386,14 @@ class Tracer {
       if (!domains.contains(d)) domains.add(d);
     }
     // What the site is for is read where the link ends up.
-    final fin = hops?.last.$1 ?? uri;
+    final fin = lead.finalUri;
     for (final d in domains.take(3)) {
       if (_cancelled) return;
       final host = hosts.firstWhere((h) => registrableDomain(h) == d, orElse: () => d);
       final from = hops == null ? start : _nodes.keys.where((k) => k.startsWith('url:') && Uri.tryParse(k.substring(4))?.host.toLowerCase() == host).lastOrNull;
       final end = registrableDomain(fin.host.toLowerCase()) == d;
       await _traceDomain(d, host, from ?? start,
-          brand: brand, official: official || officialBrandFor(d) != null, purpose: end || domains.length == 1, page: end ? fin : null);
+          brand: lead.brand, official: lead.official || officialBrandFor(d) != null, purpose: end || domains.length == 1, page: end ? fin : null);
     }
   }
 
@@ -378,6 +427,17 @@ class Tracer {
     final hops = <(Uri, int?)>[];
     var current = start;
     for (var i = 0; i < 8; i++) {
+      try {
+        await ensurePublicHost(current);
+      } on BlockedAddress catch (e) {
+        // Shown on the map, never opened.
+        hops.add((current, null));
+        _flag('Points into your own network',
+            'The link${i == 0 ? ' goes to' : ' redirects to'} ${e.address}, ${e.reason}. Real websites never do this; '
+                'it can be a trick to reach your router or other devices. Kantoi did not open it.',
+            16);
+        break;
+      }
       final req = http.Request('GET', current)
         ..followRedirects = false
         ..headers['User-Agent'] = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36';
@@ -406,10 +466,36 @@ class Tracer {
   // ------------------------------------------------------------ websites
 
   Future<void> _traceDomain(String domain, String host, String? parent, {String? brand, bool official = false, bool purpose = true, Uri? page}) async {
-    final id = _node(TraceKind.domain, domain, domain, parent: parent, edge: 'on website');
-    if (id == null) return;
-    if (official) _fact(id, 'Official', 'Listed as an official website of ${officialBrandFor(domain) ?? 'a known brand'}');
+    final ctx = _domainNode(domain, host, parent, brand: brand, official: official);
+    if (ctx == null) return;
+    await _domainRegistration(ctx);
+    await _domainDns(ctx);
+    await _domainCerts(ctx);
 
+    // Kantoi's own scam map, on the phone.
+    await _intelDomain(domain, ctx.id, [...ctx.ips], ctx.ns.toList());
+
+    if (purpose) {
+      await _siteCheck(domain, host, ctx.id, page: page, ageDays: ctx.ageDays, official: ctx.official);
+    } else if (!ctx.official) {
+      await _webReports(WebIdentifier.domain(domain), ctx.id);
+    }
+  }
+
+  /// The website's node, and what its lookups found so far.
+  _DomainCtx? _domainNode(String domain, String host, String? parent, {String? brand, bool official = false}) {
+    final id = _node(TraceKind.domain, domain, domain, parent: parent, edge: 'on website');
+    if (id == null) return null;
+    if (official) _fact(id, 'Official', 'Listed as an official website of ${officialBrandFor(domain) ?? 'a known brand'}');
+    final ctx = _domains.putIfAbsent(domain, () => _DomainCtx(domain, host, id));
+    ctx.brand ??= brand;
+    ctx.official = ctx.official || official;
+    return ctx;
+  }
+
+  /// When the website was registered, by whom, and its nameservers.
+  Future<void> _domainRegistration(_DomainCtx ctx) async {
+    final domain = ctx.domain, id = ctx.id, official = ctx.official;
     // Registration (RDAP).
     final rdap = await _lookup('Domain registry (RDAP)', 'Asking the registry when $domain was registered and by whom',
         online: true, nodeId: id, run: () async => parseRdapDomain(await _get(Uri.parse('https://rdap.org/domain/$domain'), headers: {'Accept': 'application/rdap+json'})),
@@ -421,12 +507,10 @@ class Tracer {
         if (r.registrar != null) 'via ${r.registrar}',
       ].join(' ');
     });
-    final ns = <String>{};
-    int? ageDays;
     if (rdap != null) {
       if (rdap.created != null) {
         final age = DateTime.now().difference(rdap.created!).inDays;
-        ageDays = age;
+        ctx.ageDays = age;
         _fact(id, 'Registered', '${shortDate(rdap.created!)} (${_ago(age)})');
         if (!official) {
           if (age < 30) {
@@ -439,9 +523,13 @@ class Tracer {
         }
       }
       if (rdap.registrar != null) _fact(id, 'Registrar', rdap.registrar!);
-      ns.addAll(rdap.nameservers);
+      ctx.ns.addAll(rdap.nameservers);
     }
+  }
 
+  /// Server addresses, nameservers and mail servers, and who runs the servers.
+  Future<void> _domainDns(_DomainCtx ctx) async {
+    final domain = ctx.domain, id = ctx.id, official = ctx.official;
     // DNS over HTTPS, all four record types at once.
     Future<List<String>?> dig(String type, int code) => _lookup<List<String>>('DNS (dns.google)', '$type records for $domain over DNS-over-HTTPS',
             online: true, nodeId: id, run: () async {
@@ -451,7 +539,7 @@ class Tracer {
     final dns = await Future.wait([dig('A', 1), dig('AAAA', 28), dig('NS', 2), dig('MX', 15)]);
     final a = (dns[0] ?? const <String>[]).where(_ipv4.hasMatch).take(3).toList();
     final aaaa = (dns[1] ?? const <String>[]).take(1).toList();
-    ns.addAll(dns[2] ?? const []);
+    final ns = ctx.ns..addAll(dns[2] ?? const []);
     final mx = [for (final m in dns[3] ?? const <String>[]) m.split(' ').last].where((m) => m.contains('.')).take(2).toList();
     for (final n in ns.take(3)) {
       _node(TraceKind.nameserver, n, n, parent: id, edge: 'nameserver');
@@ -462,13 +550,18 @@ class Tracer {
     if (dns.every((x) => x != null) && a.isEmpty && aaaa.isEmpty && !official) {
       _fact(id, 'Address', 'No server address: the site may already be taken down');
     }
+    ctx.ips.addAll(a.where((ip) => !ctx.ips.contains(ip)));
     for (final ip in [...a, ...aaaa]) {
       _node(TraceKind.ip, ip, ip, parent: id, edge: 'resolves to');
     }
     for (final ip in a.take(2)) {
       await _ipOwner(ip);
     }
+  }
 
+  /// The security certificate and the public certificate logs.
+  Future<void> _domainCerts(_DomainCtx ctx) async {
+    final domain = ctx.domain, host = ctx.host, id = ctx.id, official = ctx.official, brand = ctx.brand;
     // Certificate, read over a raw TLS connection (nothing is sent).
     final probe = tlsProbe;
     if (probe != null) {
@@ -518,15 +611,6 @@ class Tracer {
           if (b != null) _flag('Shares a certificate with a $b look-alike', '$domain is on the same certificate as $s, which imitates $b.', 10, nodeId: sid);
         }
       }
-    }
-
-    // Kantoi's own scam map, on the phone.
-    await _intelDomain(domain, id, [...a], ns.toList());
-
-    if (purpose) {
-      await _siteCheck(domain, host, id, page: page, ageDays: ageDays, official: official);
-    } else if (!official) {
-      await _webReports(WebIdentifier.domain(domain), id);
     }
   }
 
@@ -591,7 +675,8 @@ class Tracer {
       purpose = r?.$1 ?? classifyPurpose(PageSample.address(url));
       mcmc = r?.$2.mcmcBlocked ?? false;
       fetched = r?.$2.fetched ?? false;
-      if (!official) {
+      // A shortener or free host is popular because everyone uses it, scammers too.
+      if (!official && !anyoneCanPublishOn(host)) {
         final t = await _lookup<(int?,)>(popularityTool, 'Asking the Tranco top-sites list how popular $domain is',
             online: true, nodeId: id, run: () async => (await checker.tranco(domain),), describe: (t) {
           final r = t.$1;
@@ -606,7 +691,14 @@ class Tracer {
 
     WebIntelResult? web;
     if (!official) {
-      if (rank != null && rank <= wellKnownRank) {
+      if (anyoneCanPublishOn(host)) {
+        final s = LogStep(
+            tool: webTool,
+            action: 'Searching the web for reports about $domain',
+            result: 'Skipped: anyone can make links or pages on $domain, so pages about it are not about this link',
+            status: StepStatus.skipped);
+        _emit(TraceLookupEvent(TraceLookup(_ids++, s, id)));
+      } else if (rank != null && rank <= wellKnownRank) {
         final s = LogStep(
             tool: webTool,
             action: 'Searching the web for reports about $domain',
@@ -755,7 +847,7 @@ class Tracer {
 
   // ------------------------------------------------------------ numbers
 
-  Future<void> _tracePhone(String raw, String? parent) async {
+  Future<void> _tracePhone(String raw, String? parent, {bool web = true}) async {
     final p = analyzePhone(raw);
     final id = _node(TraceKind.phone, p.digits, p.display, parent: parent, edge: 'contains number');
     if (id == null) return;
@@ -791,11 +883,11 @@ class Tracer {
     for (final h in hits ?? const <IntelEntity>[]) {
       _relatedCase(h, id, 'This number is in the scam map');
     }
-    await _webReports(WebIdentifier.phone(raw), id);
+    if (web) await _webReports(WebIdentifier.phone(raw), id);
     _semakMuleNote(id, p.display);
   }
 
-  Future<void> _traceAccount(String raw, String? parent) async {
+  Future<void> _traceAccount(String raw, String? parent, {bool web = true}) async {
     final a = analyzeAccount(raw);
     final id = _node(TraceKind.account, a.digits, 'Account ${a.masked}', parent: parent, edge: 'contains account');
     if (id == null) return;
@@ -815,7 +907,7 @@ class Tracer {
     for (final h in hits ?? const <IntelEntity>[]) {
       _relatedCase(h, id, 'This account is in the scam map');
     }
-    await _webReports(WebIdentifier.account(a.digits), id);
+    if (web) await _webReports(WebIdentifier.account(a.digits), id);
     _semakMuleNote(id, 'this account');
   }
 
@@ -831,7 +923,7 @@ class Tracer {
 
   // ------------------------------------------------------------ email
 
-  Future<void> _traceEmail(String raw, String? parent) async {
+  Future<void> _traceEmail(String raw, String? parent, {bool web = true, bool website = true}) async {
     final e = raw.trim().toLowerCase();
     final at = e.lastIndexOf('@');
     if (at <= 0) return;
@@ -859,11 +951,12 @@ class Tracer {
         _node(TraceKind.brand, b, 'Imitates $b', parent: id, edge: 'pretends to be', flagged: true, facts: [('Brand', b)]);
       }
     }
-    await _webReports(WebIdentifier.email(e), id);
+    if (web) await _webReports(WebIdentifier.email(e), id);
     if (free) {
       _fact(id, 'Provider', 'Free email service ($domain)');
       return;
     }
+    if (!website) return;
     await _traceDomain(registrableDomain(domain), domain, id, official: officialBrandFor(domain) != null);
   }
 
@@ -979,4 +1072,32 @@ CtNames parseCtNames(String body, String domain) {
   final s = subs.toList()..sort((a, b) => rank(a) != rank(b) ? rank(a) - rank(b) : a.length - b.length);
   final o = sibs.toList()..sort((a, b) => rank(a) != rank(b) ? rank(a) - rank(b) : a.compareTo(b));
   return CtNames(list.length, first, s, o);
+}
+
+/// What a link lookup found: its node, the last hop on the map, the hosts in
+/// its chain and the brand it imitates.
+class _UrlLead {
+  final Uri uri;
+  final String? start;
+  final String? last;
+  final List<String> hosts;
+  final List<(Uri, int?)>? hops;
+  final String? brand;
+  final bool official;
+  const _UrlLead(this.uri, this.start, this.last, this.hosts, this.hops, this.brand, this.official);
+
+  Uri get finalUri => hops?.last.$1 ?? uri;
+}
+
+/// What the lookups found about one website so far.
+class _DomainCtx {
+  final String domain;
+  final String host;
+  final String id;
+  String? brand;
+  bool official = false;
+  int? ageDays;
+  final Set<String> ns = {};
+  final List<String> ips = [];
+  _DomainCtx(this.domain, this.host, this.id);
 }

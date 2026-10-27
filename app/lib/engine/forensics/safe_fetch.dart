@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'net_guard.dart';
+
 /// How Kantoi opens a suspicious page without a real browser: its own HTTP
 /// client, with no cookies, no saved logins, no downloads (it stops reading
 /// after [maxPageBytes] and never writes to disk), no scripts run, a short
@@ -43,6 +45,8 @@ class PageFetch {
 
 /// Fetches [url] the isolated way, following up to [maxHops] redirects one at
 /// a time. Throws on network failure or timeout; callers log it and carry on.
+/// Every hop is checked first: a hop into a private network throws
+/// [BlockedAddress] and is never requested.
 Future<PageFetch> fetchIsolated(
   Uri url, {
   required http.Client client,
@@ -54,6 +58,7 @@ Future<PageFetch> fetchIsolated(
   var current = url;
   final hops = <(Uri, int?)>[];
   for (var i = 0; i <= maxHops; i++) {
+    await ensurePublicHost(current);
     final req = http.Request('GET', current)
       ..followRedirects = false
       ..headers.addAll({
