@@ -17,6 +17,7 @@ import 'ui/intel_page.dart';
 import 'ui/kit.dart';
 import 'ui/learn_page.dart';
 import 'ui/protection_page.dart';
+import 'ui/report/report_tab.dart';
 import 'ui/settings_page.dart';
 import 'ui/setup_page.dart';
 import 'ui/theme.dart';
@@ -72,6 +73,7 @@ class _ShellState extends State<Shell> {
   static const _tabs = [
     (Icons.shield_outlined, Icons.shield_rounded, 'Check'),
     (Icons.hub_outlined, Icons.hub_rounded, 'Trace'),
+    (Icons.flag_outlined, Icons.flag_rounded, 'Report'),
     (Icons.school_outlined, Icons.school_rounded, 'Learn'),
     (Icons.emergency_outlined, Icons.emergency_rounded, 'Emergency'),
   ];
@@ -122,7 +124,8 @@ class _ShellState extends State<Shell> {
   Widget _page(int i) => switch (i) {
     0 => const CheckPage(),
     1 => const IntelPage(),
-    2 => const LearnPage(),
+    2 => const ReportTab(),
+    3 => const LearnPage(),
     _ => const EmergencyPage(embedded: true),
   };
 
@@ -212,14 +215,14 @@ class _GlassNav extends StatelessWidget {
           child: SafeArea(
             top: false,
             child: SizedBox(
-              height: 64,
+              height: 68,
               child: Row(
                 children: [
                   for (var i = 0; i < items.length; i++)
                     Expanded(
                       child: InkResponse(
                         onTap: () => onTap(i),
-                        child: _NavItem(item: items[i], selected: i == index, danger: i == 3),
+                        child: _NavItem(item: items[i], selected: i == index, danger: i == tabEmergency),
                       ),
                     ),
                 ],
@@ -257,6 +260,9 @@ class _NavItem extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           item.$3,
+          maxLines: 1,
+          overflow: TextOverflow.fade,
+          softWrap: false,
           style: TextStyle(fontSize: 11, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: c),
         ),
       ],

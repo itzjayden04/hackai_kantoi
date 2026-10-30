@@ -503,7 +503,7 @@ class _CheckPageState extends State<CheckPage> {
                       color: K.red,
                       title: 'Already paid?',
                       subtitle: 'Get help right now',
-                      onTap: () => appState.tab.value = 3,
+                      onTap: () => appState.tab.value = tabEmergency,
                     ),
                   ),
                 ],
