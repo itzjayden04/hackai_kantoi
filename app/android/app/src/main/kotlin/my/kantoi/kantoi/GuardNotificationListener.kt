@@ -9,9 +9,9 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 
 /**
- * Reads new message notifications from chat apps (WhatsApp, Telegram, SMS)
- * and email apps (Gmail, Outlook) and hands each new message to Kantoi's
- * checks. Notifications from other apps are ignored, and nothing is stored
+ * Reads new message notifications from the Scam Monitor's apps (chat, SMS,
+ * social, email and marketplaces; see MonitorApps) and hands each new
+ * message to Kantoi's checks. Notifications from other apps are ignored, and nothing is stored
  * unless a message is flagged.
  */
 class GuardNotificationListener : NotificationListenerService() {
@@ -44,8 +44,8 @@ class GuardNotificationListener : NotificationListenerService() {
     private fun read(sbn: StatusBarNotification) {
         if (!GuardEngine.guardOn(this, "messages")) return
         val pkg = sbn.packageName ?: return
-        val email = pkg in GuardEngine.emailApps
-        if (pkg !in GuardEngine.chatApps && !email) return
+        if (!MonitorApps.watched(this, pkg)) return
+        val email = MonitorApps.isEmail(pkg)
         val n = sbn.notification ?: return
         // "3 new messages" group summaries repeat what the child notifications hold.
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
@@ -82,7 +82,19 @@ class GuardNotificationListener : NotificationListenerService() {
                 "text" to m.text,
                 "incoming" to m.incoming,
             )
-            GuardEngine.check(this, msg) { GuardEngine.handle(this, it) }
+            if (m.incoming) MonitorApps.count(this, pkg, false)
+            val key = sbn.key
+            GuardEngine.check(this, msg) {
+                GuardEngine.handle(this, it)
+                // Take the scam out of the notification shade; Kantoi's own
+                // warning (posted by handle) replaces it.
+                if (it != null && it["alert"] == true && it["level"] == "danger" && MonitorApps.hideScams(this)) {
+                    try {
+                        cancelNotification(key)
+                    } catch (e: Exception) {
+                    }
+                }
+            }
         }
     }
 

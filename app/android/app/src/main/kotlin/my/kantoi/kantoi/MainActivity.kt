@@ -76,6 +76,17 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(null)
                 }
+                "monitor" -> result.success(MonitorApps.snapshot(this))
+                "setMonitor" -> {
+                    val a = call.arguments as? Map<*, *>
+                    val pkg = a?.get("pkg") as? String
+                    if (pkg != null) MonitorApps.setOn(this, pkg, a["on"] == true)
+                    result.success(null)
+                }
+                "setHideScams" -> {
+                    MonitorApps.setHideScams(this, call.arguments == true)
+                    result.success(null)
+                }
                 "clear" -> {
                     GuardEngine.clearRecent(this)
                     result.success(null)
