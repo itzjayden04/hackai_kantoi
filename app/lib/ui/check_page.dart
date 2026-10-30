@@ -15,6 +15,8 @@ import 'kit.dart';
 import 'relationship_page.dart';
 import 'result_view.dart';
 import 'theme.dart';
+import 'monitor/monitor_page.dart';
+import '../guard/guard_control.dart' show guardSupported;
 
 /// The Check tab: paste or add something, watch Kantoi check it, then read
 /// the result in place.
@@ -482,6 +484,7 @@ class _CheckPageState extends State<CheckPage> {
         children: [
           const Reveal(index: 0, child: ProtectionStatusCard()),
           const SizedBox(height: 12),
+          if (guardSupported) ...[const Reveal(index: 1, child: MonitorCard()), const SizedBox(height: 12)],
           Reveal(
             index: 1,
             child: IntrinsicHeight(

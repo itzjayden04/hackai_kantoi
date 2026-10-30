@@ -59,7 +59,7 @@ class _ReportTabState extends State<ReportTab> {
     final req = appState.reportRequest.value;
     if (req == null) return;
     appState.reportRequest.value = null;
-    final r = req.inv != null ? ScamReport.fromCheck(req.inv!, id: _newId()) : ScamReport(id: _newId());
+    final r = req.report ?? (req.inv != null ? ScamReport.fromCheck(req.inv!, id: _newId()) : ScamReport(id: _newId()));
     if (req.lostMoney) r.lostMoney = true;
     _start(r, inv: req.inv);
   }

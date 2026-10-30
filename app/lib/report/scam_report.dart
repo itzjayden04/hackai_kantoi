@@ -364,6 +364,29 @@ class ScamReport {
   }
 }
 
+/// A report started from a phone warning (Scam Monitor): the app it came
+/// in on, numbers and links found in the message, and a masked excerpt.
+ScamReport reportFromAlert({required String id, required String app, required String chat, required String text, String scamType = ''}) {
+  final pii = findPii(text);
+  final ids = <AttackerId>[
+    if (RegExp(r'^\+?[\d\s-]{8,}$').hasMatch(chat.trim())) AttackerId(IdentifierType.phone, chat.trim()),
+    for (final m in pii)
+      if (m.type == PiiType.phone) AttackerId(IdentifierType.phone, m.value)
+      else if (m.type == PiiType.email) AttackerId(IdentifierType.email, m.value),
+  ];
+  final links = [for (final m in RegExp(r'(https?://\S+|\b[a-z0-9-]+\.(?:top|xyz|com|my|net|link|site|online|shop|info|cc|vip)\S*)', caseSensitive: false).allMatches(text)) m.group(0)!];
+  final excerpt = redact(text, pii);
+  return ScamReport(
+    id: id,
+    kind: classifyScam(scamType: scamType, text: text)?.code,
+    channel: channelFor(Source.paste, app),
+    attackers: ids,
+    links: links,
+    incidentAt: DateTime.now(),
+    description: 'Kantoi warned about this message${chat.isEmpty ? '' : ' from $chat'}: "${excerpt.length > 300 ? '${excerpt.substring(0, 300)}…' : excerpt}"',
+  );
+}
+
 /// The channel a check came in on, from its source or the app package.
 ContactChannel? channelFor(Source source, [String? app]) {
   final a = app ?? '';

@@ -10,13 +10,16 @@ import 'cloud/detection.dart';
 import 'cloud/outbox.dart';
 import 'engine/models.dart';
 import 'history/history_log.dart';
+import 'report/scam_report.dart';
 
 const tabCheck = 0, tabTrace = 1, tabReport = 2, tabLearn = 3, tabEmergency = 4;
 
 class ReportRequest {
   final Investigation? inv;
   final bool lostMoney;
-  const ReportRequest({this.inv, this.lostMoney = false});
+  /// A report already started elsewhere, e.g. from a Scam Monitor alert.
+  final ScamReport? report;
+  const ReportRequest({this.inv, this.lostMoney = false, this.report});
 }
 
 /// A short title for a check: its first link's site, else its first words.
@@ -58,8 +61,8 @@ class AppState extends ChangeNotifier {
   /// Report tab.
   final reportRequest = ValueNotifier<ReportRequest?>(null);
 
-  void openReport({Investigation? inv, bool lostMoney = false}) {
-    reportRequest.value = ReportRequest(inv: inv, lostMoney: lostMoney);
+  void openReport({Investigation? inv, bool lostMoney = false, ScamReport? report}) {
+    reportRequest.value = ReportRequest(inv: inv, lostMoney: lostMoney, report: report);
     tab.value = tabReport;
   }
 
