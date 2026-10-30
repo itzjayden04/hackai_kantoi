@@ -12,6 +12,7 @@ import 'guardian_ui.dart';
 import 'kit.dart';
 import '../state.dart';
 import 'theme.dart';
+import 'vault/vault_page.dart';
 
 /// The fast path for someone who has already paid or shared details. Calls
 /// come first; the paperwork comes after. Deliberately plain and serious.
@@ -65,6 +66,8 @@ class _EmergencyPageState extends State<EmergencyPage> {
         Reveal(index: 2, child: CaseChecklist(caseId: _caseId, title: _caseTitle)),
         const SizedBox(height: 16),
         Reveal(index: 3, child: _ReportEntry(onOpen: _openReport)),
+        const SizedBox(height: 12),
+        const Reveal(index: 4, child: VaultCard()),
         const SizedBox(height: 16),
         const HotlineList(),
         const SizedBox(height: 16),
