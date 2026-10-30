@@ -35,6 +35,16 @@ class Outbox extends ChangeNotifier {
   /// Total records sent from this phone, shown in Settings.
   int sent = 0;
 
+  /// Share masked details of confident scam detections. On by default: the
+  /// user agreed at sign-up, and can turn it off in Settings.
+  bool shareDetections = true;
+
+  Future<void> setShareDetections(bool on) async {
+    shareDetections = on;
+    if (!on) items.removeWhere((i) => i.collection == 'detections');
+    await _persist();
+  }
+
   Future<void> load() async {
     try {
       final p = await SharedPreferences.getInstance();
@@ -42,6 +52,7 @@ class Outbox extends ChangeNotifier {
         ..clear()
         ..addAll((p.getStringList(_k) ?? []).map((s) => OutboxItem.fromJson(jsonDecode(s) as Map<String, dynamic>)));
       sent = p.getInt('$_k.sent') ?? 0;
+      shareDetections = p.getBool('$_k.share') ?? true;
     } catch (_) {}
     notifyListeners();
   }
@@ -92,6 +103,7 @@ class Outbox extends ChangeNotifier {
       final p = await SharedPreferences.getInstance();
       await p.setStringList(_k, items.map((i) => jsonEncode(i.toJson())).toList());
       await p.setInt('$_k.sent', sent);
+      await p.setBool('$_k.share', shareDetections);
     } catch (_) {}
     notifyListeners();
   }
