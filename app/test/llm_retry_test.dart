@@ -32,4 +32,33 @@ void main() {
     expect((await postGemini(badKey, apiKey: 'k', model: 'm', body: '{}', timeout: const Duration(seconds: 5))).statusCode, 400);
     expect(calls, 1);
   });
+
+  test('a key out of quota hands over to the second key, then rests for an hour', () async {
+    geminiBackupKey = 'k2';
+    resetGeminiKeyRest();
+    final keys = <String>[];
+    final client = MockClient((r) async {
+      final k = r.headers['x-goog-api-key']!;
+      keys.add(k);
+      return k == 'k1' ? http.Response('quota', 429) : http.Response('{}', 200);
+    });
+    final t = DateTime(2026, 10, 30, 12);
+    Future<int> call(DateTime at) async =>
+        (await postGemini(client, apiKey: 'k1', model: 'm', body: '{}', timeout: const Duration(seconds: 5), now: at)).statusCode;
+    expect(await call(t), 200);
+    expect(keys, ['k1', 'k2']);
+    keys.clear();
+    expect(await call(t.add(const Duration(minutes: 30))), 200);
+    expect(keys, ['k2']);
+    keys.clear();
+    await call(t.add(const Duration(hours: 2)));
+    expect(keys, ['k1', 'k2']);
+    geminiBackupKey = '';
+  });
+
+  test('without a second key a quota error is returned as is', () async {
+    geminiBackupKey = '';
+    final client = MockClient((r) async => http.Response('quota', 429));
+    expect((await postGemini(client, apiKey: 'k1', model: 'm', body: '{}', timeout: const Duration(seconds: 5))).statusCode, 429);
+  });
 }

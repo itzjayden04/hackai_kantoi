@@ -200,6 +200,8 @@ class Verdict {
   final String nextStep;
   final List<String> whatWouldChange;
   final List<String> notChecked;
+  /// The taxonomy code (see taxonomy.dart) when the AI named one.
+  final String? kind;
   const Verdict({
     required this.score,
     required this.level,
@@ -209,10 +211,12 @@ class Verdict {
     required this.nextStep,
     this.whatWouldChange = const [],
     this.notChecked = const [],
+    this.kind,
   });
 
   Map<String, dynamic> toJson() => {
         'score': score,
+        'kind': ?kind,
         'level': level.name,
         'label': riskLabel(level),
         'confidence': confidence,
