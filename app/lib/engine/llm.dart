@@ -188,11 +188,36 @@ const geminiBackupModel = 'gemini-flash-lite-latest';
 /// For tests: the pause before asking a busy Gemini again.
 Duration geminiRetryPause = const Duration(seconds: 2);
 
+/// The second Gemini key baked in at build time (GEMINI_API_KEY_2), used when
+/// the first one runs out of quota. Empty when the build has none.
+String geminiBackupKey = const String.fromEnvironment('GEMINI_API_KEY_2');
+
+/// When the last key that ran out of quota may be tried again. A key that
+/// answered 429 is skipped for an hour so every check does not wait on it.
+final Map<String, DateTime> _keyRestUntil = {};
+
+/// For tests: forget which keys ran out of quota.
+void resetGeminiKeyRest() => _keyRestUntil.clear();
+
 /// Posts to Gemini's generateContent. Gemini sometimes answers 503 ("high
 /// demand") or 500 for a moment, so a busy answer is tried once more after a
-/// short pause, then once on the lighter backup model.
+/// short pause, then once on the lighter backup model. When the key is out of
+/// quota (429) and the build has a second key, the second key is used, and
+/// the first is rested for an hour.
 Future<http.Response> postGemini(http.Client client,
-    {required String apiKey, required String model, required String body, required Duration timeout}) async {
+    {required String apiKey, required String model, required String body, required Duration timeout, DateTime? now}) async {
+  final t = now ?? DateTime.now();
+  final backup = geminiBackupKey;
+  final canSwap = backup.isNotEmpty && backup != apiKey;
+  final rested = _keyRestUntil[apiKey];
+  if (canSwap && rested != null && t.isBefore(rested)) return _postGeminiWithKey(client, backup, model, body, timeout);
+  final res = await _postGeminiWithKey(client, apiKey, model, body, timeout);
+  if (res.statusCode != 429 || !canSwap) return res;
+  _keyRestUntil[apiKey] = t.add(const Duration(hours: 1));
+  return _postGeminiWithKey(client, backup, model, body, timeout);
+}
+
+Future<http.Response> _postGeminiWithKey(http.Client client, String apiKey, String model, String body, Duration timeout) async {
   Future<http.Response> send(String m) => client
       .post(Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent'),
           headers: {'Content-Type': 'application/json', 'x-goog-api-key': apiKey}, body: body)

@@ -6,7 +6,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'engine/cases.dart';
 import 'engine/retention.dart';
 import 'engine/review.dart';
+import 'auth/auth_service.dart';
+import 'cloud/outbox.dart';
+import 'history/history_log.dart';
+import 'report/report_store.dart';
 import 'state.dart';
+import 'vault/vault.dart';
 
 /// What Kantoi keeps on the device besides settings: the feedback review
 /// queue and the victim's case checklists, plus the retention choice that
@@ -39,7 +44,10 @@ class LocalStore extends ChangeNotifier {
   Future<void> applyRetention({DateTime? now}) async {
     final t = now ?? DateTime.now();
     final p = retentionPeriod(retention);
-    if (p != null) appState.dropOlderThan(t.subtract(p));
+    if (p != null) {
+      appState.dropOlderThan(t.subtract(p));
+      await historyLog.dropOlderThan(t.subtract(p));
+    }
     final removed = pruneOld(review, (r) => r.at, retention, now: t) + pruneOld(cases, (c) => c.createdAt, retention, now: t);
     if (removed > 0) await _save();
     notifyListeners();
@@ -112,6 +120,12 @@ class LocalStore extends ChangeNotifier {
     cases.clear();
     retention = defaultRetention;
     appState.forgetAll();
+    await historyLog.clear();
+    await reportStore.deleteAll();
+    await cloudOutbox.clear();
+    await vault.deleteAll();
+    vault.lock();
+    await auth.deleteAccount();
     try {
       final p = await SharedPreferences.getInstance();
       await p.clear();

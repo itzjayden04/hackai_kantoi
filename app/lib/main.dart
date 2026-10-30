@@ -3,7 +3,13 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'auth/auth_service.dart';
+import 'cloud/outbox.dart';
 import 'guard/guard_background.dart';
+import 'history/history_log.dart';
+import 'report/report_store.dart';
+import 'ui/auth/auth_flow.dart';
+import 'vault/vault.dart';
 import 'guard/guard_control.dart';
 import 'local_store.dart';
 import 'intake/share_intake.dart';
@@ -17,6 +23,7 @@ import 'ui/intel_page.dart';
 import 'ui/kit.dart';
 import 'ui/learn_page.dart';
 import 'ui/protection_page.dart';
+import 'ui/report/report_tab.dart';
 import 'ui/settings_page.dart';
 import 'ui/setup_page.dart';
 import 'ui/theme.dart';
@@ -25,9 +32,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await appState.load();
   await localStore.load();
+  await auth.load();
+  await Future.wait([historyLog.load(), reportStore.load(), cloudOutbox.load(), vault.load()]);
   await startTelegramBot();
   final firstRun = guardSupported && !await setupSeen();
-  runApp(KantoiApp(firstRun: firstRun));
+  runApp(KantoiApp(firstRun: firstRun, needsLogin: !auth.signedIn));
 }
 
 /// Entry point for Android phone protection, started by the native side
@@ -39,13 +48,41 @@ final navigatorKey = GlobalKey<NavigatorState>();
 
 class KantoiApp extends StatefulWidget {
   final bool firstRun;
-  const KantoiApp({super.key, this.firstRun = false});
+  /// Every user signs in before using the app (tests skip it).
+  final bool needsLogin;
+  const KantoiApp({super.key, this.firstRun = false, this.needsLogin = false});
   @override
   State<KantoiApp> createState() => _KantoiAppState();
 }
 
-class _KantoiAppState extends State<KantoiApp> {
+class _KantoiAppState extends State<KantoiApp> with WidgetsBindingObserver {
   late bool _setup = widget.firstRun;
+  late bool _login = widget.needsLogin;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    auth.addListener(_onAuth);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    auth.removeListener(_onAuth);
+    super.dispose();
+  }
+
+  /// Signing out (or the 7-day rule) returns to the login screen.
+  void _onAuth() {
+    if (!mounted) return;
+    if (!auth.signedIn && widget.needsLogin && !_login) setState(() => _login = true);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState s) {
+    if (s == AppLifecycleState.resumed && widget.needsLogin) auth.checkInactivity();
+  }
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -57,7 +94,11 @@ class _KantoiAppState extends State<KantoiApp> {
     themeMode: ThemeMode.light,
     home: AnimatedSwitcher(
       duration: K.medium,
-      child: _setup ? SetupFlow(key: const ValueKey('setup'), onDone: () => setState(() => _setup = false)) : const Shell(),
+      child: _login
+          ? AuthFlow(key: const ValueKey('login'), onDone: () => setState(() => _login = false))
+          : _setup
+          ? SetupFlow(key: const ValueKey('setup'), startAtPermissions: widget.needsLogin, onDone: () => setState(() => _setup = false))
+          : const Shell(),
     ),
   );
 }
@@ -72,6 +113,7 @@ class _ShellState extends State<Shell> {
   static const _tabs = [
     (Icons.shield_outlined, Icons.shield_rounded, 'Check'),
     (Icons.hub_outlined, Icons.hub_rounded, 'Trace'),
+    (Icons.flag_outlined, Icons.flag_rounded, 'Report'),
     (Icons.school_outlined, Icons.school_rounded, 'Learn'),
     (Icons.emergency_outlined, Icons.emergency_rounded, 'Emergency'),
   ];
@@ -122,7 +164,8 @@ class _ShellState extends State<Shell> {
   Widget _page(int i) => switch (i) {
     0 => const CheckPage(),
     1 => const IntelPage(),
-    2 => const LearnPage(),
+    2 => const ReportTab(),
+    3 => const LearnPage(),
     _ => const EmergencyPage(embedded: true),
   };
 
@@ -212,14 +255,14 @@ class _GlassNav extends StatelessWidget {
           child: SafeArea(
             top: false,
             child: SizedBox(
-              height: 64,
+              height: 68,
               child: Row(
                 children: [
                   for (var i = 0; i < items.length; i++)
                     Expanded(
                       child: InkResponse(
                         onTap: () => onTap(i),
-                        child: _NavItem(item: items[i], selected: i == index, danger: i == 3),
+                        child: _NavItem(item: items[i], selected: i == index, danger: i == tabEmergency),
                       ),
                     ),
                 ],
@@ -257,6 +300,9 @@ class _NavItem extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           item.$3,
+          maxLines: 1,
+          overflow: TextOverflow.fade,
+          softWrap: false,
           style: TextStyle(fontSize: 11, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: c),
         ),
       ],

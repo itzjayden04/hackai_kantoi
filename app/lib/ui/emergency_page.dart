@@ -10,8 +10,9 @@ import 'emergency/hotlines.dart';
 import 'emergency/widgets.dart';
 import 'guardian_ui.dart';
 import 'kit.dart';
-import 'report_page.dart';
+import '../state.dart';
 import 'theme.dart';
+import 'vault/vault_page.dart';
 
 /// The fast path for someone who has already paid or shared details. Calls
 /// come first; the paperwork comes after. Deliberately plain and serious.
@@ -65,6 +66,8 @@ class _EmergencyPageState extends State<EmergencyPage> {
         Reveal(index: 2, child: CaseChecklist(caseId: _caseId, title: _caseTitle)),
         const SizedBox(height: 16),
         Reveal(index: 3, child: _ReportEntry(onOpen: _openReport)),
+        const SizedBox(height: 12),
+        const Reveal(index: 4, child: VaultCard()),
         const SizedBox(height: 16),
         const HotlineList(),
         const SizedBox(height: 16),
@@ -75,8 +78,12 @@ class _EmergencyPageState extends State<EmergencyPage> {
     return Scaffold(appBar: AppBar(title: const Text('Emergency help')), body: body);
   }
 
-  void _openReport() => Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => ReportPage(inv: widget.inv, initial: Situation.lostMoney, caseId: _caseId, caseTitle: _caseTitle, details: _d)));
+  /// "Prepare my report" goes to the Report tab, pre-filled with this check
+  /// and what was typed into the call script.
+  void _openReport() {
+    if (!widget.embedded) Navigator.of(context).popUntil((r) => r.isFirst);
+    appState.openReport(inv: widget.inv, lostMoney: true);
+  }
 
   Widget _scriptCard(BuildContext context) {
     final t = Theme.of(context).textTheme;
@@ -237,8 +244,8 @@ class _ReportEntry extends StatelessWidget {
         ]),
         const SizedBox(height: 6),
         Text(
-            'Kantoi fills in an incident sheet for the police, 997, your bank or MCMC, with your own details hidden. '
-            'You check it before anything is shared.',
+            'Fill a report in 2 minutes, ready for the police, your bank and Kantoi. '
+            'Your own details stay hidden, and you check it before anything is shared.',
             style: t.bodyMedium?.copyWith(color: Colors.white.withValues(alpha: 0.88))),
         const SizedBox(height: 14),
         FilledButton.icon(
