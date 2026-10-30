@@ -99,3 +99,12 @@ function hash_(s) {
 function reply_(o) {
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
 }
+
+/** Run once from the editor: creates APP_KEY and PROOF_KEY and logs APP_KEY. */
+function setupKeys() {
+  var props = PropertiesService.getScriptProperties();
+  var make = function () { return Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, ''); };
+  if (!props.getProperty('APP_KEY')) props.setProperty('APP_KEY', make());
+  if (!props.getProperty('PROOF_KEY')) props.setProperty('PROOF_KEY', make());
+  Logger.log('OTP_APP_KEY for GitHub: ' + props.getProperty('APP_KEY'));
+}

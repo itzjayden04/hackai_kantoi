@@ -7,9 +7,7 @@ Sends the 6-digit sign-up code from the Kantoi Gmail account, for free, with no 
 1. Sign in to Google as the Kantoi sender account (kantoi.noreply@gmail.com).
 2. Open https://script.google.com and create a new project named **Kantoi OTP**.
 3. Replace the contents of `Code.gs` with the file in this folder.
-4. Project settings (gear icon) > Script properties > add:
-   - `APP_KEY`: a long random string (e.g. from a password generator).
-   - `PROOF_KEY`: a different long random string.
+4. In the function menu at the top choose **setupKeys** and press **Run** (allow the permissions). It creates `APP_KEY` and `PROOF_KEY` and prints `APP_KEY` in the Execution log.
 5. Deploy > New deployment > type **Web app**. Execute as **Me**, Who has access **Anyone**. Deploy and allow the Gmail permission when asked.
 6. Copy the web app URL (ends in `/exec`).
 7. Add two GitHub repository secrets:
