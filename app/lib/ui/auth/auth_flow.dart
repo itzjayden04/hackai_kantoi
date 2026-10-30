@@ -277,13 +277,14 @@ class _RegisterState extends State<_Register> {
       _err = const {};
     });
     final r = _reg;
-    final p = await auth.startRegistration(r);
+    final direct = !auth.emailCodes;
+    final p = direct ? await auth.registerWithoutCode(r) : await auth.startRegistration(r);
     if (!mounted) return;
     setState(() {
       _busy = false;
       _err = p;
     });
-    if (p.isEmpty) widget.onCodeSent(r);
+    if (p.isEmpty) direct ? widget.onDone() : widget.onCodeSent(r);
   }
 
   @override
@@ -367,7 +368,7 @@ class _RegisterState extends State<_Register> {
         onPressed: _busy || !_agreed ? null : _send,
         child: _busy
             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-            : const Text('Send verification code'),
+            : Text(auth.emailCodes ? 'Send verification code' : 'Create account'),
       ),
       Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         Text('Already have an account?', style: t.bodyMedium),

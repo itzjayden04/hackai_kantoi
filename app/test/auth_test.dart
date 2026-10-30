@@ -40,6 +40,16 @@ void main() {
     expect(sent, ['jayden@example.com']);
   });
 
+  test('a build without the email sender still lets people sign up', () async {
+    final a = AuthService(otp: OtpClient(url: '', appKey: ''));
+    expect(a.emailCodes, isFalse);
+    expect((await a.registerWithoutCode(const Registration(fullName: 'J', email: 'nope', username: 'a', password: 'short', agreed: false))).keys,
+        contains('agreed'));
+    expect(await a.registerWithoutCode(_reg), isEmpty);
+    expect(a.signedIn, isTrue);
+    expect(await AuthService(otp: _otp()).registerWithoutCode(_reg), contains('form'));
+  });
+
   test('register with the code, then log in with username or email', () async {
     final a = AuthService(otp: _otp());
     expect(await a.finishRegistration(_reg, '000000'), contains('4 tries left'));

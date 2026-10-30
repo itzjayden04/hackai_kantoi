@@ -185,6 +185,23 @@ class AuthService extends ChangeNotifier {
 
   /// Step 1 of registering: checks the form and emails a code.
   /// Returns field problems, or an empty map when the code was sent.
+  /// False in a build without the email-code sender (no OTP secrets): sign-up
+  /// then skips the code so the app is never locked.
+  bool get emailCodes => otp.configured;
+
+  /// Sign-up without an email code, only for builds without the sender.
+  Future<Map<String, String>> registerWithoutCode(Registration r) async {
+    final problems = validateRegistration(r);
+    if (problems.isNotEmpty) return problems;
+    if (emailCodes) return const {'form': 'Please verify your email first.'};
+    try {
+      await _setUser(await backend.register(r, proof: 'unverified'));
+      return const {};
+    } on AuthProblem catch (e) {
+      return {'form': e.message};
+    }
+  }
+
   Future<Map<String, String>> startRegistration(Registration r) async {
     final problems = validateRegistration(r);
     if (problems.isNotEmpty) return problems;
