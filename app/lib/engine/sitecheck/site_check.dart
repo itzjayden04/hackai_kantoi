@@ -235,6 +235,14 @@ class SiteReport {
             category: CueCategory.legitimacy));
       } else if (r != null) {
         out.add(SiteReason('Listed among popular websites', '$domain is in the Tranco top 1 million (rank #$r).', -4, category: CueCategory.legitimacy));
+      } else if (trancoChecked && w?.reputation != 'good' && (ageDays == null || ageDays! < 365 * 3)) {
+        // Not known anywhere: no rank, no official owner, no good reviews.
+        out.add(SiteReason(
+            'Unfamiliar website',
+            '$domain is not among the top 1 million websites, is not an official site Kantoi knows, '
+                '${ageDays == null ? 'and its age could not be confirmed' : 'and it is only ${_years(ageDays!)} old'}. '
+                'Unknown does not mean scam, but be careful before paying, logging in or sharing details there.',
+            10));
       }
     }
     if (official && officialBrand != null && !p.risky) {
