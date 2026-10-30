@@ -124,7 +124,7 @@ The app works without these. Each one switches on one extra online check. Add th
 | Secret | Adds |
 | --- | --- |
 | `GEMINI_API_KEY` | AI explanations, screenshot reading, voice transcripts |
-| `GEMINI_API_KEY_2` | A backup Gemini key (from a different Google Cloud project) used when the first one hits its quota |
+| `KANTOI_1` | A backup Gemini key (from a different Google Cloud project) used when the first one hits its quota |
 | `OTP_URL`, `OTP_APP_KEY` | The free email-code sender for sign-up (see [server/otp/README.md](server/otp/README.md)) |
 | `GOOGLE_SERVER_CLIENT_ID` | "Continue with Google" (a Web OAuth client ID from the same Google Cloud project as the Android client) |
 | `VIRUSTOTAL_API_KEY` | Link, website and file-fingerprint reputation from 70+ security companies, plus fresh scans of unknown links (free key: 4 lookups a minute, which Kantoi stays within) |
