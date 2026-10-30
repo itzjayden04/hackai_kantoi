@@ -83,14 +83,14 @@ class GuardNotificationListener : NotificationListenerService() {
                 "incoming" to m.incoming,
             )
             if (m.incoming) MonitorApps.count(this, pkg, false)
-            val key = sbn.key
+            val notifKey = sbn.key
             GuardEngine.check(this, msg) {
                 GuardEngine.handle(this, it)
                 // Take the scam out of the notification shade; Kantoi's own
                 // warning (posted by handle) replaces it.
                 if (it != null && it["alert"] == true && it["level"] == "danger" && MonitorApps.hideScams(this)) {
                     try {
-                        cancelNotification(key)
+                        cancelNotification(notifKey)
                     } catch (e: Exception) {
                     }
                 }
