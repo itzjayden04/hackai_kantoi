@@ -6,6 +6,7 @@ import 'forensic_settings.dart';
 import 'guardian_ui.dart';
 import 'intel_page.dart' show IntelSettingsSection;
 import 'privacy_controls.dart';
+import 'settings/account_section.dart';
 import 'intake_widgets.dart';
 import 'kit.dart';
 import 'theme.dart';
@@ -69,6 +70,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final t = Theme.of(context).textTheme;
     final hasBuiltIn = LlmConfig.defaults.apiKey.isNotEmpty;
     return PageBody(children: [
+      const AccountSection(),
       _Section(
         icon: Icons.auto_awesome_outlined,
         title: 'AI explanations',

@@ -3,7 +3,13 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'auth/auth_service.dart';
+import 'cloud/outbox.dart';
 import 'guard/guard_background.dart';
+import 'history/history_log.dart';
+import 'report/report_store.dart';
+import 'ui/auth/auth_flow.dart';
+import 'vault/vault.dart';
 import 'guard/guard_control.dart';
 import 'local_store.dart';
 import 'intake/share_intake.dart';
@@ -26,9 +32,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await appState.load();
   await localStore.load();
+  await auth.load();
+  await Future.wait([historyLog.load(), reportStore.load(), cloudOutbox.load(), vault.load()]);
   await startTelegramBot();
   final firstRun = guardSupported && !await setupSeen();
-  runApp(KantoiApp(firstRun: firstRun));
+  runApp(KantoiApp(firstRun: firstRun, needsLogin: !auth.signedIn));
 }
 
 /// Entry point for Android phone protection, started by the native side
@@ -40,13 +48,41 @@ final navigatorKey = GlobalKey<NavigatorState>();
 
 class KantoiApp extends StatefulWidget {
   final bool firstRun;
-  const KantoiApp({super.key, this.firstRun = false});
+  /// Every user signs in before using the app (tests skip it).
+  final bool needsLogin;
+  const KantoiApp({super.key, this.firstRun = false, this.needsLogin = false});
   @override
   State<KantoiApp> createState() => _KantoiAppState();
 }
 
-class _KantoiAppState extends State<KantoiApp> {
+class _KantoiAppState extends State<KantoiApp> with WidgetsBindingObserver {
   late bool _setup = widget.firstRun;
+  late bool _login = widget.needsLogin;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    auth.addListener(_onAuth);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    auth.removeListener(_onAuth);
+    super.dispose();
+  }
+
+  /// Signing out (or the 7-day rule) returns to the login screen.
+  void _onAuth() {
+    if (!mounted) return;
+    if (!auth.signedIn && widget.needsLogin && !_login) setState(() => _login = true);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState s) {
+    if (s == AppLifecycleState.resumed && widget.needsLogin) auth.checkInactivity();
+  }
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -58,7 +94,11 @@ class _KantoiAppState extends State<KantoiApp> {
     themeMode: ThemeMode.light,
     home: AnimatedSwitcher(
       duration: K.medium,
-      child: _setup ? SetupFlow(key: const ValueKey('setup'), onDone: () => setState(() => _setup = false)) : const Shell(),
+      child: _login
+          ? AuthFlow(key: const ValueKey('login'), onDone: () => setState(() => _login = false))
+          : _setup
+          ? SetupFlow(key: const ValueKey('setup'), startAtPermissions: widget.needsLogin, onDone: () => setState(() => _setup = false))
+          : const Shell(),
     ),
   );
 }

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../engine/attribution/graph.dart' show shortDate;
+import '../history/history_log.dart';
 import '../engine/attribution/intel_models.dart';
 import '../engine/attribution/intel_store.dart';
 import '../engine/forensics/tls_probe.dart';
@@ -187,6 +188,8 @@ class _IntelPageState extends State<IntelPage> {
     _http = null;
     if (s.cancelled || !mounted) return;
     final risks = s.flags.where((f) => f.isRisk).length;
+    historyLog.add(HistoryEntry(HistoryType.trace, s.target,
+        detail: '${s.entityCount} items, $risks warning sign${risks == 1 ? '' : 's'}', result: s.level.name, at: DateTime.now(), ref: s.target));
     showKToast(
       context,
       title: 'Trace complete',
