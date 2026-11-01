@@ -11,13 +11,15 @@ import 'check/result_parts.dart';
 import 'trace/site_summary.dart';
 import 'emergency_page.dart';
 import 'explainer_card.dart';
+import 'vault/vault_page.dart';
+import '../engine/taxonomy.dart';
+import '../vault/vault.dart';
 import 'feedback_bar.dart';
 import 'forensics_widgets.dart';
 import 'guardian_ui.dart';
 import 'intel_page.dart' show DemoBadge;
 import 'kit.dart';
 import 'limits_page.dart';
-import 'report_page.dart';
 import 'review_page.dart';
 import 'theme.dart';
 import 'warning_image.dart';
@@ -41,6 +43,8 @@ class ResultView extends StatelessWidget {
     final web = webIntelOf(inv);
     final parts = <Widget>[
       VerdictCard(verdict: v, label: verdictLabel(v.level, inv.findings)),
+      if (v.level != RiskLevel.safe && shouldAskSafeWord(kindCode: kindOf(inv)?.code, scamType: v.scamType, text: inv.artefact.text))
+        const SafeWordBanner(),
       if (risky) _HelpRow(inv: inv),
       if (inlineActions) ResultActionBar(inv: inv),
       // What each linked website is for and how the internet rates it.
@@ -347,7 +351,11 @@ class ResultActionBar extends StatelessWidget {
               style: FilledButton.styleFrom(padding: pad, textStyle: text, foregroundColor: K.onErrorContainer, backgroundColor: K.errorContainer),
               icon: const Icon(Icons.flag_outlined, size: 20),
               label: label('Report'),
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReportPage(inv: inv))),
+              onPressed: () {
+                final nav = Navigator.of(context);
+                if (nav.canPop()) nav.popUntil((r) => r.isFirst);
+                appState.openReport(inv: inv);
+              },
             ),
           ),
           const SizedBox(width: 8),

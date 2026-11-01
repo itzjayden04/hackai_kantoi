@@ -162,6 +162,7 @@ object GuardEngine {
         val chat = result["chat"]?.toString().orEmpty()
         val text = result["text"]?.toString().orEmpty()
         remember(ctx, result, if (kind == "chats") "chat" else "message", text)
+        result["app"]?.toString()?.let { MonitorApps.count(ctx, it, true) }
         count(ctx, kind)
         val reasons = (result["reasons"] as? List<*>)?.joinToString(", ") { it.toString() }.orEmpty()
         val checkedBy = result["checkedBy"]?.toString().orEmpty()
@@ -186,7 +187,7 @@ object GuardEngine {
     }
 
     /**
-     * Keeps the last 30 warnings on the phone for the Protection centre, and
+     * Keeps the last 100 warnings on the phone for the Protection centre, and
      * counts them. [kind] is message, chat, call, site, app or photo; [target]
      * is what a tap traces.
      */
@@ -200,7 +201,7 @@ object GuardEngine {
         o.put("kind", kind)
         o.put("target", target)
         val out = JSONArray().put(o.toString())
-        for (i in 0 until minOf(old.length(), 29)) out.put(old.getString(i))
+        for (i in 0 until minOf(old.length(), 99)) out.put(old.getString(i))
         p.edit().putString("recent", out.toString()).putInt("n_warnings", p.getInt("n_warnings", 0) + 1).apply()
     }
 
@@ -211,30 +212,4 @@ object GuardEngine {
 
     fun clearRecent(ctx: Context) = prefs(ctx).edit().remove("recent").apply()
 
-    /** Chat apps whose notifications Kantoi checks. Everything else is ignored. */
-    val chatApps = setOf(
-        "com.whatsapp",
-        "com.whatsapp.w4b",
-        "org.telegram.messenger",
-        "org.telegram.messenger.web",
-        "org.thunderdog.challegram",
-        // SMS: Google, Samsung, AOSP, Honor and Huawei messaging apps.
-        "com.google.android.apps.messaging",
-        "com.samsung.android.messaging",
-        "com.android.mms",
-        "com.android.messaging",
-        "com.hihonor.mms",
-        "com.huawei.message",
-        "com.huawei.mms",
-        "com.facebook.orca",
-        "com.instagram.android",
-    )
-
-    /** Email apps: their notifications carry the sender and subject (and often a preview). */
-    val emailApps = setOf(
-        "com.google.android.gm",
-        "com.microsoft.office.outlook",
-        "com.samsung.android.email.provider",
-        "com.yahoo.mobile.client.android.mail",
-    )
 }

@@ -10,8 +10,9 @@ import 'emergency/hotlines.dart';
 import 'emergency/widgets.dart';
 import 'guardian_ui.dart';
 import 'kit.dart';
-import 'report_page.dart';
+import '../state.dart';
 import 'theme.dart';
+import 'vault/vault_page.dart';
 
 /// The fast path for someone who has already paid or shared details. Calls
 /// come first; the paperwork comes after. Deliberately plain and serious.
@@ -58,163 +59,250 @@ class _EmergencyPageState extends State<EmergencyPage> {
       children: [
         Reveal(child: _Header(onCall: _call997)),
         const SizedBox(height: 16),
-        Reveal(index: 1, child: _scriptCard(context)),
+        Reveal(index: 1, child: _ReportEntry(onOpen: _openReport)),
+        const SizedBox(height: 12),
+        const Reveal(index: 2, child: VaultCard()),
+        const SizedBox(height: 12),
+        Reveal(
+          index: 3,
+          child: CaseChecklist(caseId: _caseId, title: _caseTitle),
+        ),
+        const SizedBox(height: 12),
+        Reveal(index: 4, child: _scriptCard(context)),
         const SizedBox(height: 12),
         GuardianAlertButton(inv: widget.inv, emergency: true),
-        const SizedBox(height: 4),
-        Reveal(index: 2, child: CaseChecklist(caseId: _caseId, title: _caseTitle)),
-        const SizedBox(height: 16),
-        Reveal(index: 3, child: _ReportEntry(onOpen: _openReport)),
-        const SizedBox(height: 16),
-        const HotlineList(),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         const _OtherHelp(),
       ],
     );
     if (widget.embedded) return body;
-    return Scaffold(appBar: AppBar(title: const Text('Emergency help')), body: body);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Emergency help')),
+      body: body,
+    );
   }
 
-  void _openReport() => Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => ReportPage(inv: widget.inv, initial: Situation.lostMoney, caseId: _caseId, caseTitle: _caseTitle, details: _d)));
+  /// "Prepare my report" goes to the Report tab, pre-filled with this check
+  /// and what was typed into the call script.
+  void _openReport() {
+    if (!widget.embedded) Navigator.of(context).popUntil((r) => r.isFirst);
+    appState.openReport(inv: widget.inv, lostMoney: true);
+  }
 
   Widget _scriptCard(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final script = callScript(_d, widget.inv);
     return KCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          const Icon(Icons.record_voice_over_outlined, color: K.primary),
-          const SizedBox(width: 10),
-          Expanded(child: Text('What to say on the call', style: t.titleMedium)),
-          const Pill('Read it out', color: K.primary),
-        ]),
-        const SizedBox(height: 4),
-        Text('For 997 or your bank. Fill in the blanks so you do not have to think on the phone.', style: t.bodySmall),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: const BoxDecoration(
-            color: K.surfaceLow,
-            borderRadius: BorderRadius.all(Radius.circular(12)),
-            border: Border(left: BorderSide(color: K.primary, width: 3)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const TintIcon(Icons.record_voice_over_outlined, background: K.surfaceMid, size: 36),
+              const SizedBox(width: 12),
+              Expanded(child: Text('What to say on the call', style: t.titleMedium)),
+              const Pill('Read it out', color: K.primary),
+            ],
           ),
-          child: ScriptText(script, style: t.bodyMedium?.copyWith(height: 1.6, color: K.onSurface)),
-        ),
-        AnimatedSize(
-          duration: K.medium,
-          curve: K.curve,
-          alignment: Alignment.topCenter,
-          child: !_fill
-              ? const SizedBox(width: double.infinity)
-              : Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Column(children: [
-                    _field('How much did you send?', 'RM 1,500', (v) => _d.amount = v, initial: _d.amount),
-                    _field('When?', 'Today 3:20pm', (v) => _d.when = v, initial: _d.when),
-                    _field('From which bank?', 'Maybank', (v) => _d.paidFromBank = v, initial: _d.paidFromBank),
-                    _field('To which account?', 'Account number', (v) => _d.paidTo = v, initial: _d.paidTo),
-                    Row(children: [
-                      const Icon(Icons.lock_outline_rounded, size: 14, color: K.outline),
-                      const SizedBox(width: 6),
-                      Expanded(child: Text('Stays on this phone.', style: t.labelSmall?.copyWith(color: K.outline))),
-                    ]),
-                  ]),
+          const SizedBox(height: 4),
+          Text('For 997 or your bank. Fill in the blanks so you do not have to think on the phone.', style: t.bodySmall),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: const BoxDecoration(color: K.surfaceLow, borderRadius: K.r12),
+            child: ScriptText(script, style: t.bodyMedium?.copyWith(height: 1.6, color: K.onSurface)),
+          ),
+          AnimatedSize(
+            duration: K.medium,
+            curve: K.curve,
+            alignment: Alignment.topCenter,
+            child: !_fill
+                ? const SizedBox(width: double.infinity)
+                : Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Column(
+                      children: [
+                        _field('How much did you send?', 'RM 1,500', (v) => _d.amount = v, initial: _d.amount),
+                        _field('When?', 'Today 3:20pm', (v) => _d.when = v, initial: _d.when),
+                        _field('From which bank?', 'Maybank', (v) => _d.paidFromBank = v, initial: _d.paidFromBank),
+                        _field('To which account?', 'Account number', (v) => _d.paidTo = v, initial: _d.paidTo),
+                        Row(
+                          children: [
+                            const Icon(Icons.lock_outline_rounded, size: 14, color: K.outline),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text('Stays on this phone.', style: t.labelSmall?.copyWith(color: K.outline)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: Icon(_fill ? Icons.expand_less_rounded : Icons.edit_outlined, size: 18),
+                  label: Text(_fill ? 'Done' : 'Fill in blanks'),
+                  onPressed: () => setState(() => _fill = !_fill),
                 ),
-        ),
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              icon: Icon(_fill ? Icons.expand_less_rounded : Icons.edit_outlined, size: 18),
-              label: Text(_fill ? 'Done' : 'Fill in blanks'),
-              onPressed: () => setState(() => _fill = !_fill),
-            ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+                  icon: const Icon(Icons.content_copy_rounded, size: 18),
+                  label: const Text('Copy script'),
+                  onPressed: () => copyText(context, script, 'Call script'),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-              icon: const Icon(Icons.content_copy_rounded, size: 18),
-              label: const Text('Copy script'),
-              onPressed: () => copyText(context, script, 'Call script'),
-            ),
-          ),
-        ]),
-      ]),
+        ],
+      ),
     );
   }
 
   Widget _field(String label, String hint, void Function(String) on, {String initial = ''}) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: TextFormField(
-          initialValue: initial,
-          decoration: InputDecoration(labelText: label, hintText: hint, isDense: true),
-          onChanged: (v) => setState(() => on(v)),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 10),
+    child: TextFormField(
+      initialValue: initial,
+      decoration: InputDecoration(labelText: label, hintText: hint, isDense: true),
+      onChanged: (v) => setState(() => on(v)),
+    ),
+  );
 }
 
-class _Header extends StatelessWidget {
+class _Header extends StatefulWidget {
   final VoidCallback onCall;
   const _Header({required this.onCall});
+  @override
+  State<_Header> createState() => _HeaderState();
+}
+
+class _HeaderState extends State<_Header> {
+  bool _banks = false;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-      decoration: const BoxDecoration(color: emergencyRed, borderRadius: BorderRadius.all(Radius.circular(20))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          const Icon(Icons.emergency_outlined, color: Colors.white, size: 20),
-          const SizedBox(width: 8),
-          Text('EMERGENCY', style: t.labelMedium?.copyWith(color: Colors.white, letterSpacing: 1.2)),
-        ]),
-        const SizedBox(height: 10),
-        Text('Already paid or shared your details?',
-            style: t.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 6),
-        Text('Stay calm and act now. The sooner you call, the better the chance the money can be stopped.',
-            style: t.bodyMedium?.copyWith(color: Colors.white.withValues(alpha: 0.92))),
-        const SizedBox(height: 16),
-        Material(
-          color: Colors.white,
-          borderRadius: const BorderRadius.all(Radius.circular(14)),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onCall,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: const BoxDecoration(color: emergencyRed, shape: BoxShape.circle),
-                  child: const Icon(Icons.call_rounded, color: Colors.white, size: 26),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      decoration: BoxDecoration(color: K.errorContainer.withValues(alpha: 0.45), borderRadius: const BorderRadius.all(Radius.circular(20))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(color: emergencyRed, shape: BoxShape.circle),
+                child: const Icon(Icons.warning_rounded, color: Colors.white, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Scammed right now?',
+                      style: t.headlineSmall?.copyWith(color: emergencyRed, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Already paid or shared your details? Stay calm and call now. The sooner the bank knows, the better the chance to stop the money.',
+                      style: t.bodyMedium?.copyWith(color: K.onSurfaceVariant),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Call 997 now',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: emergencyRed, letterSpacing: -0.3)),
-                    Text('National Scam Response Centre', style: t.bodySmall?.copyWith(color: K.onSurface)),
-                  ]),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Material(
+            color: emergencyRed,
+            borderRadius: K.r12,
+            clipBehavior: Clip.antiAlias,
+            elevation: 2,
+            shadowColor: emergencyRed.withValues(alpha: 0.4),
+            child: InkWell(
+              onTap: widget.onCall,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    const Icon(Icons.phone_in_talk_rounded, color: Colors.white, size: 26),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Call 997 now',
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.3),
+                          ),
+                          Text('National Scam Response Centre · $nsrcHours', style: t.bodySmall?.copyWith(color: Colors.white.withValues(alpha: 0.9))),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right_rounded, color: Colors.white),
+                  ],
                 ),
-                const Icon(Icons.chevron_right_rounded, color: emergencyRed),
-              ]),
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 10),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.schedule_rounded, size: 14, color: Colors.white),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text('$nsrcHours. Call within 24 hours of the transfer.',
-                textAlign: TextAlign.center, style: t.labelSmall?.copyWith(color: Colors.white.withValues(alpha: 0.9))),
+          const SizedBox(height: 10),
+          Material(
+            color: Colors.white,
+            borderRadius: K.r12,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => setState(() => _banks = !_banks),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    const Icon(Icons.account_balance_outlined, color: K.onSurface),
+                    const SizedBox(width: 14),
+                    Expanded(child: Text('Call my bank', style: t.titleMedium)),
+                    Text('${bankHotlines.length} hotlines', style: t.labelMedium?.copyWith(color: K.secondary)),
+                    AnimatedRotation(
+                      turns: _banks ? 0.5 : 0,
+                      duration: K.fast,
+                      child: const Icon(Icons.expand_more_rounded, color: K.secondary),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ]),
-      ]),
+          AnimatedSize(
+            duration: K.medium,
+            curve: K.curve,
+            alignment: Alignment.topCenter,
+            child: _banks ? const Padding(padding: EdgeInsets.only(top: 10), child: HotlineList()) : const SizedBox(width: double.infinity),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.schedule_rounded, size: 14, color: emergencyRed),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'Call within 24 hours of the transfer.',
+                  textAlign: TextAlign.center,
+                  style: t.labelSmall?.copyWith(color: emergencyRed),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -226,28 +314,43 @@ class _ReportEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: const BoxDecoration(color: K.primaryContainer, borderRadius: K.r16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          const Icon(Icons.assignment_outlined, color: Colors.white),
-          const SizedBox(width: 10),
-          Expanded(child: Text('Fast report', style: t.titleMedium?.copyWith(color: Colors.white))),
-        ]),
-        const SizedBox(height: 6),
-        Text(
-            'Kantoi fills in an incident sheet for the police, 997, your bank or MCMC, with your own details hidden. '
-            'You check it before anything is shared.',
-            style: t.bodyMedium?.copyWith(color: Colors.white.withValues(alpha: 0.88))),
-        const SizedBox(height: 14),
-        FilledButton.icon(
-          style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: K.primary),
-          icon: const Icon(Icons.description_outlined),
-          label: const Text('Prepare my report'),
-          onPressed: onOpen,
-        ),
-      ]),
+    return KCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const TintIcon(Icons.flag_outlined, color: K.primary, background: K.surfaceMid, size: 48),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: Text('Prepare my report', style: t.titleMedium)),
+                        const Pill('Fast track', color: K.primary),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Fill a report in 2 minutes, ready for the police, your bank and Kantoi. You check it before anything is shared.',
+                      style: t.bodyMedium?.copyWith(color: K.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: onOpen,
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [Text('Go to Report'), SizedBox(width: 8), Icon(Icons.arrow_forward_rounded, size: 20)]),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -259,21 +362,25 @@ class _OtherHelp extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     Widget row(IconData i, String title, String sub, String url) => ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: Icon(i, color: K.primary),
-          title: Text(title, style: t.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-          subtitle: Text(sub, style: t.bodySmall),
-          trailing: const Icon(Icons.open_in_new_rounded, size: 18, color: K.outline),
-          onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
-        );
+      contentPadding: EdgeInsets.zero,
+      leading: TintIcon(i, background: K.surfaceMid, size: 36),
+      title: Text(title, style: t.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+      subtitle: Text(sub, style: t.bodySmall),
+      trailing: const Icon(Icons.open_in_new_rounded, size: 18, color: K.outline),
+      onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+    );
     return KCard(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('Other official help', style: t.titleMedium),
-        row(Icons.local_police_outlined, 'Police report online', 'PDRM e-Reporting', police.target!),
-        row(Icons.manage_search_rounded, 'Check an account or number', 'PDRM Semak Mule', semakMule.target!),
-        row(Icons.sms_failed_outlined, 'Report scam SMS, calls or sites', 'MCMC complaints', mcmc.target!),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Other official help', style: t.titleMedium),
+          const SizedBox(height: 4),
+          row(Icons.local_police_outlined, 'Police report online', 'PDRM e-Reporting', police.target!),
+          row(Icons.manage_search_rounded, 'Check an account or number', 'PDRM Semak Mule', semakMule.target!),
+          row(Icons.sms_failed_outlined, 'Report scam SMS, calls or sites', 'MCMC complaints', mcmc.target!),
+        ],
+      ),
     );
   }
 }

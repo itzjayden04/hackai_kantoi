@@ -6,7 +6,37 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'engine/forensics/keys.dart';
 import 'engine/investigator.dart';
 import 'engine/llm.dart';
+import 'cloud/detection.dart';
+import 'cloud/outbox.dart';
 import 'engine/models.dart';
+import 'history/history_log.dart';
+import 'report/scam_report.dart';
+
+const tabCheck = 0, tabTrace = 1, tabReport = 2, tabLearn = 3, tabEmergency = 4;
+
+class ReportRequest {
+  final Investigation? inv;
+  final bool lostMoney;
+  /// A report already started elsewhere, e.g. from a Scam Monitor alert.
+  final ScamReport? report;
+  const ReportRequest({this.inv, this.lostMoney = false, this.report});
+}
+
+/// A short title for a check: its first link's site, else its first words.
+String checkTitle(Investigation i) {
+  final host = i.urls.map((u) => u.host).where((h) => h.isNotEmpty).firstOrNull;
+  final kind = switch (i.artefact.source) {
+    Source.qr => 'QR code',
+    Source.screenshot => 'Screenshot',
+    Source.email => 'Email',
+    Source.apk => 'App file',
+    Source.voice => 'Voice message',
+    _ => 'Message',
+  };
+  if (host != null) return '$kind: $host';
+  final t = i.artefact.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+  return t.isEmpty ? kind : (t.length > 48 ? '${t.substring(0, 48)}…' : t);
+}
 
 class AppState extends ChangeNotifier {
   LlmConfig llm = LlmConfig.defaults;
@@ -15,7 +45,7 @@ class AppState extends ChangeNotifier {
   ForensicKeys keys = ForensicKeys.defaults;
   final List<Investigation> history = [];
 
-  /// Which bottom tab is showing (0 Check, 1 Trace, 2 Learn, 3 Emergency).
+  /// Which bottom tab is showing (0 Check, 1 Trace, 2 Report, 3 Learn, 4 Emergency).
   /// Any screen or a notification tap can switch tabs through this.
   final tab = ValueNotifier<int>(0);
 
@@ -26,6 +56,15 @@ class AppState extends ChangeNotifier {
   /// Each tab can register what Back does inside it (stop a check, close a
   /// result). It returns false when the tab is already at its start.
   final Map<int, bool Function()> backHandlers = {};
+
+  /// A check or emergency details to start a report from, picked up by the
+  /// Report tab.
+  final reportRequest = ValueNotifier<ReportRequest?>(null);
+
+  void openReport({Investigation? inv, bool lostMoney = false, ScamReport? report}) {
+    reportRequest.value = ReportRequest(inv: inv, lostMoney: lostMoney, report: report);
+    tab.value = tabReport;
+  }
 
   void openTrace(String target) {
     traceRequest.value = target;
@@ -80,7 +119,19 @@ class AppState extends ChangeNotifier {
     history.insert(0, i);
     if (history.length > 50) history.removeLast();
     notifyListeners();
+    historyLog.add(HistoryEntry(
+      HistoryType.check,
+      checkTitle(i),
+      detail: i.verdict.scamType,
+      result: i.verdict.level.name,
+      at: i.artefact.receivedAt,
+      ref: i.artefact.receivedAt.toIso8601String(),
+    ));
+    shareDetection(i, sharingOn: cloudOutbox.shareDetections);
   }
+
+  /// A check by the time it was received (history taps use this).
+  Investigation? checkAt(String iso) => history.where((i) => i.artefact.receivedAt.toIso8601String() == iso).firstOrNull;
 
   /// Drops checks and live items older than [cutoff] (data retention).
   void dropOlderThan(DateTime cutoff) {

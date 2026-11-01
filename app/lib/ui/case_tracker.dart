@@ -32,19 +32,17 @@ class CaseChecklist extends StatelessWidget {
         final all = n == caseSteps.length;
         return KCard(
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('What to do right now', style: t.titleMedium),
-                  const SizedBox(height: 2),
-                  Text('Tap each step when it is done.', style: t.bodySmall),
-                ]),
-              ),
+            Row(children: [
+              const Icon(Icons.checklist_rtl_rounded, color: K.primary),
               const SizedBox(width: 8),
-              Pill('$n of ${caseSteps.length} done', color: all ? K.green : K.red),
+              Expanded(child: Text('Stop the damage', style: t.titleMedium)),
+              const SizedBox(width: 8),
+              Pill('$n of ${caseSteps.length} done', color: all ? K.green : K.primary),
             ]),
+            const SizedBox(height: 4),
+            Text('Do these in order. Tap each step when it is done.', style: t.bodySmall?.copyWith(color: K.secondary)),
             const SizedBox(height: 12),
-            KProgressBar(value: n / caseSteps.length, color: all ? K.green : K.red, height: 6),
+            KProgressBar(value: n / caseSteps.length, color: all ? K.green : K.primaryContainer, height: 6),
             const SizedBox(height: 12),
             for (final (i, s) in caseSteps.indexed)
               _StepTile(
@@ -87,11 +85,8 @@ class _StepTile extends StatelessWidget {
         checked: done,
         button: true,
         child: Material(
-          color: done ? K.surfaceLow : Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: const BorderRadius.all(Radius.circular(12)),
-            side: BorderSide(color: done ? Colors.transparent : K.outlineVariant.withValues(alpha: 0.7)),
-          ),
+          color: done ? K.surfaceMid : K.surfaceLow,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onTap,
@@ -105,9 +100,9 @@ class _StepTile extends StatelessWidget {
                   height: 24,
                   margin: const EdgeInsets.only(top: 1),
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: done ? K.green : Colors.white,
-                    border: Border.all(color: done ? K.green : K.outline, width: 2),
+                    borderRadius: const BorderRadius.all(Radius.circular(6)),
+                    color: done ? K.primaryContainer : Colors.white,
+                    border: Border.all(color: done ? K.primaryContainer : K.outline, width: 2),
                   ),
                   child: AnimatedSwitcher(
                     duration: K.fast,
@@ -130,7 +125,14 @@ class _StepTile extends StatelessWidget {
                         color: done ? K.outline : K.onSurface,
                         decoration: done ? TextDecoration.lineThrough : null,
                       ),
-                      child: Text(step.title),
+                      child: Text.rich(TextSpan(children: [
+                        TextSpan(text: step.title),
+                        if (index <= 2 && !done)
+                          const WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: Padding(padding: EdgeInsets.only(left: 6), child: Pill('Urgent', color: K.error)),
+                          ),
+                      ])),
                     ),
                     if (!compact) ...[
                       const SizedBox(height: 2),

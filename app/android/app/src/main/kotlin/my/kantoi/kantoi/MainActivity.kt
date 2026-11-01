@@ -22,6 +22,7 @@ class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
     private var guard: MethodChannel? = null
     private var pending: Map<String, Any?>? = null
+    private var vault: VaultBridge? = null
 
     /** A tapped warning notification, waiting for Flutter to ask (cold start). */
     private var pendingTrace: String? = null
@@ -43,6 +44,7 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        vault = VaultBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         guard = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "kantoi/guard")
         guard?.setMethodCallHandler { call, result ->
             when (call.method) {
@@ -72,6 +74,17 @@ class MainActivity : FlutterActivity() {
                         "badge" -> ChatBadge.preview(this)
                         else -> PauseOverlay.preview(this)
                     }
+                    result.success(null)
+                }
+                "monitor" -> result.success(MonitorApps.snapshot(this))
+                "setMonitor" -> {
+                    val a = call.arguments as? Map<*, *>
+                    val pkg = a?.get("pkg") as? String
+                    if (pkg != null) MonitorApps.setOn(this, pkg, a["on"] == true)
+                    result.success(null)
+                }
+                "setHideScams" -> {
+                    MonitorApps.setHideScams(this, call.arguments == true)
                     result.success(null)
                 }
                 "clear" -> {
@@ -184,6 +197,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (vault?.onActivityResult(requestCode, resultCode) == true) return
         if (requestCode == 43 && callScreeningOn()) askAnswerCalls()
     }
 

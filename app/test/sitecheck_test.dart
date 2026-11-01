@@ -438,4 +438,22 @@ void main() {
       expect(inv.findings.map((f) => f.title), contains('Well-known website'));
     });
   });
+
+  group('Unfamiliar websites', () {
+    const plain = PurposeResult(purpose: SitePurpose.general, level: RiskLevel.safe, confidence: 0.5, basis: PurposeBasis.page);
+    SiteReport site(String d, {bool checked = true, int? rank, int? age}) =>
+        SiteReport(domain: d, url: 'https://$d', purpose: plain, trancoChecked: checked, trancoRank: rank, ageDays: age, checkedAt: DateTime(2026));
+
+    test('a young site nobody ranks is flagged as unfamiliar', () {
+      final s = site('cheap-iphone-deal.shop', age: 20);
+      expect(s.reasons().map((r) => r.title), contains('Unfamiliar website'));
+      expect(s.level, RiskLevel.caution);
+    });
+    test('a ranked, old or unchecked site is not', () {
+      expect(site('example.com', rank: 5000).reasons().map((r) => r.title), isNot(contains('Unfamiliar website')));
+      expect(site('oldbakery.my', age: 365 * 6).reasons().map((r) => r.title), isNot(contains('Unfamiliar website')));
+      expect(site('offline.my', checked: false).reasons(), isEmpty);
+      expect(site('maybank2u.com.my').reasons().map((r) => r.title), isNot(contains('Unfamiliar website')));
+    });
+  });
 }

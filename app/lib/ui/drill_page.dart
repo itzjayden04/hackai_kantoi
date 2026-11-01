@@ -4,6 +4,7 @@ import '../awareness/coach.dart';
 import '../awareness/drills.dart';
 import '../awareness/explainers.dart';
 import '../engine/models.dart';
+import '../history/history_log.dart';
 import 'explainer_card.dart' show explainerIcon;
 import 'kit.dart';
 import 'learn/learn_widgets.dart';
@@ -62,6 +63,8 @@ class _DrillPageState extends State<DrillPage> {
   void _next() {
     if (_round >= widget.rounds) {
       setState(() => _summary = true);
+      historyLog.add(HistoryEntry(HistoryType.learn, 'Spot-the-scam quiz',
+          detail: '${_results.length} questions', result: 'Quiz $_score/${_results.length}', at: DateTime.now()));
       return;
     }
     final d = _round == 0 && widget.first != null ? widget.first! : coach.next(focus: widget.focus);

@@ -9,7 +9,8 @@ import 'theme.dart';
 // Shared building blocks for every screen: cards, pills, progress, popups,
 // in-app notifications and the live "how Kantoi works" pipeline.
 
-/// White rounded card with the design system's hairline border.
+/// White rounded card with a soft shadow (no border lines, per the design
+/// system); pass [borderColor] to outline a selected or tinted card.
 class KCard extends StatelessWidget {
   final Widget child;
   final EdgeInsets padding;
@@ -22,11 +23,70 @@ class KCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return Material(
-      color: color ?? (dark ? scheme.surfaceContainerLow : Colors.white),
-      shape: RoundedRectangleBorder(borderRadius: K.r16, side: BorderSide(color: borderColor ?? scheme.outlineVariant.withValues(alpha: 0.6))),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(onTap: onTap, child: Padding(padding: padding, child: child)),
+    final bg = color ?? (dark ? scheme.surfaceContainerLow : Colors.white);
+    return DecoratedBox(
+      decoration: BoxDecoration(borderRadius: K.r16, boxShadow: dark || bg != Colors.white ? null : K.shadow),
+      child: Material(
+        color: bg,
+        shape: RoundedRectangleBorder(borderRadius: K.r16, side: borderColor == null ? BorderSide.none : BorderSide(color: borderColor!)),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(onTap: onTap, child: Padding(padding: padding, child: child)),
+      ),
+    );
+  }
+}
+
+/// A field label above its input, as in the design system forms.
+class FieldLabel extends StatelessWidget {
+  final String text;
+  final Widget? trailing;
+  const FieldLabel(this.text, {super.key, this.trailing});
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 6, top: 4),
+        child: Row(children: [
+          Expanded(child: Text(text, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: K.onSurface))),
+          ?trailing,
+        ]),
+      );
+}
+
+/// Round tinted icon badge used at the start of list rows and cards.
+class TintIcon extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final Color? background;
+  final double size;
+  final bool square;
+  const TintIcon(this.icon, {super.key, this.color = K.primary, this.background, this.size = 40, this.square = false});
+  @override
+  Widget build(BuildContext context) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: background ?? color.withValues(alpha: 0.1),
+          shape: square ? BoxShape.rectangle : BoxShape.circle,
+          borderRadius: square ? BorderRadius.circular(size * 0.25) : null,
+        ),
+        child: Icon(icon, color: color, size: size * 0.5),
+      );
+}
+
+/// Uppercase small section heading with an optional right-hand note.
+class SectionLabel extends StatelessWidget {
+  final String text;
+  final String? note;
+  final Color? noteColor;
+  const SectionLabel(this.text, {super.key, this.note, this.noteColor});
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+      child: Row(children: [
+        Expanded(child: Text(text.toUpperCase(), style: t.labelSmall?.copyWith(color: K.secondary, letterSpacing: 0.8))),
+        if (note != null) Text(note!, style: t.labelSmall?.copyWith(color: noteColor ?? K.secondary)),
+      ]),
     );
   }
 }

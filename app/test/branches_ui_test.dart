@@ -46,11 +46,14 @@ void main() {
     await t.pumpWidget(MaterialApp(home: EmergencyPage(inv: inv)));
     await t.pumpAndSettle();
     expect(find.text('Call 997 now'), findsOneWidget);
-    expect(find.text('What to do right now'), findsOneWidget);
+    expect(find.text('Stop the damage'), findsOneWidget);
     expect(find.text('0 OF ${caseSteps.length} DONE'), findsOneWidget);
     await t.tap(find.text('Keep the evidence'));
     await t.pumpAndSettle();
     expect(find.text('1 OF ${caseSteps.length} DONE'), findsOneWidget);
+    await t.ensureVisible(find.text('Call my bank'));
+    await t.tap(find.text('Call my bank'));
+    await t.pumpAndSettle();
     expect(find.text('Bank fraud lines'), findsOneWidget);
     await t.pumpWidget(wrap(SingleChildScrollView(child: ResultView(inv: inv))));
     expect(find.text('This was actually legit'), findsOneWidget);

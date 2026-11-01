@@ -7,6 +7,7 @@ import 'app_check.dart';
 import 'call_check.dart';
 import 'chat_ai.dart';
 import 'link_guard.dart';
+import '../vault/vault.dart' show shouldAskSafeWord;
 
 /// Phone protection: scores chat messages that Android hands over from
 /// notifications or the open chat screen, and decides when to show the pause
@@ -184,6 +185,11 @@ class GuardCore {
         if (aiV.advice != null) next = aiV.advice!;
       }
     }
+    // Someone who may be posing as family or a friend: remind the user of
+    // their safe word.
+    final askSafeWord = worst.index >= RiskLevel.caution.index &&
+        (scamType.toLowerCase().contains('friend') || shouldAskSafeWord(scamType: scamType, text: body));
+    if (askSafeWord && !next.toLowerCase().contains('safe word')) next = 'Ask for your safe word. $next';
     const floor = {RiskLevel.safe: 0, RiskLevel.caution: 25, RiskLevel.suspicious: 45, RiskLevel.danger: 70};
     if (score < floor[worst]!) score = floor[worst]!;
     return {
@@ -197,6 +203,7 @@ class GuardCore {
       'nextStep': next,
       'reasons': reasons,
       'moneyAsk': money.any || money.code,
+      'askSafeWord': askSafeWord,
       'ai': aiV == null ? 'none' : (aiV.cloud ? 'cloud' : 'device'),
       'aiLevel': aiV?.level.name,
       'checkedBy': aiV == null

@@ -6,6 +6,10 @@ import '../engine/models.dart';
 class K {
   static const primary = Color(0xFF00236F);
   static const primaryContainer = Color(0xFF1E3A8A);
+  static const primaryFixed = Color(0xFFDCE1FF);
+  static const secondary = Color(0xFF565E74);
+  static const secondaryContainer = Color(0xFFDAE2FD);
+  static const tertiaryFixed = Color(0xFFFFDCC3);
   static const surface = Color(0xFFF8F9FF);
   static const surfaceLow = Color(0xFFEFF4FF);
   static const surfaceMid = Color(0xFFE5EEFF);
@@ -33,6 +37,8 @@ class K {
 
   static const r16 = BorderRadius.all(Radius.circular(16));
   static const r8 = BorderRadius.all(Radius.circular(8));
+  static const r12 = BorderRadius.all(Radius.circular(12));
+  static const shadow = [BoxShadow(color: Color(0x0F0B1C30), blurRadius: 12, offset: Offset(0, 2))];
 
   static const fast = Duration(milliseconds: 220);
   static const medium = Duration(milliseconds: 380);
@@ -51,10 +57,10 @@ ThemeData buildTheme(Brightness b) {
           onPrimary: Colors.white,
           primaryContainer: K.primaryContainer,
           onPrimaryContainer: Color(0xFF90A8FF),
-          secondary: Color(0xFF505F76),
+          secondary: K.secondary,
           onSecondary: Colors.white,
-          secondaryContainer: Color(0xFFD0E1FB),
-          onSecondaryContainer: Color(0xFF54647A),
+          secondaryContainer: K.secondaryContainer,
+          onSecondaryContainer: Color(0xFF5C647A),
           tertiary: Color(0xFF4B2500),
           onTertiary: Colors.white,
           tertiaryContainer: K.tertiaryContainer,
@@ -112,11 +118,14 @@ ThemeData buildTheme(Brightness b) {
     cardTheme: CardThemeData(
       elevation: 0,
       color: dark ? scheme.surfaceContainerLow : Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: K.r16, side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6))),
+      shape: const RoundedRectangleBorder(borderRadius: K.r16),
       margin: EdgeInsets.zero,
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
+        backgroundColor: dark ? null : K.primaryContainer,
+        disabledBackgroundColor: dark ? null : K.surfaceMid,
+        disabledForegroundColor: dark ? null : K.outline,
         minimumSize: const Size(0, 52),
         textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.w600),
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
@@ -125,18 +134,23 @@ ThemeData buildTheme(Brightness b) {
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(0, 48),
-        side: BorderSide(color: scheme.outlineVariant),
+        backgroundColor: dark ? null : Colors.white,
+        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.5)),
         textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.w600),
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
       ),
     ),
     chipTheme: base.chipTheme.copyWith(shape: const StadiumBorder(), side: BorderSide(color: scheme.outlineVariant)),
     inputDecorationTheme: InputDecorationTheme(
-      border: OutlineInputBorder(borderRadius: K.r8, borderSide: BorderSide(color: scheme.outlineVariant)),
-      enabledBorder: OutlineInputBorder(borderRadius: K.r8, borderSide: BorderSide(color: scheme.outlineVariant)),
-      focusedBorder: OutlineInputBorder(borderRadius: K.r8, borderSide: BorderSide(color: scheme.primary, width: 2)),
+      border: const OutlineInputBorder(borderRadius: K.r12, borderSide: BorderSide.none),
+      enabledBorder: const OutlineInputBorder(borderRadius: K.r12, borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(borderRadius: K.r12, borderSide: BorderSide(color: scheme.primaryContainer, width: 1.5)),
+      errorBorder: OutlineInputBorder(borderRadius: K.r12, borderSide: BorderSide(color: scheme.error.withValues(alpha: 0.5))),
+      focusedErrorBorder: OutlineInputBorder(borderRadius: K.r12, borderSide: BorderSide(color: scheme.error, width: 1.5)),
       filled: true,
-      fillColor: dark ? scheme.surfaceContainerLow : Colors.white,
+      fillColor: dark ? scheme.surfaceContainerLow : K.surfaceLow,
+      hintStyle: const TextStyle(color: K.outline),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     ),
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: dark ? scheme.surfaceContainerLow : Colors.white,
@@ -153,7 +167,7 @@ ThemeData buildTheme(Brightness b) {
     progressIndicatorTheme: ProgressIndicatorThemeData(color: scheme.primary, linearTrackColor: scheme.surfaceContainerHigh),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith((s) => Colors.white),
-      trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? K.green : scheme.outlineVariant),
+      trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? (dark ? K.green : K.primaryContainer) : scheme.outlineVariant),
       trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
     ),
     dividerTheme: DividerThemeData(color: scheme.outlineVariant.withValues(alpha: 0.5), space: 1),
