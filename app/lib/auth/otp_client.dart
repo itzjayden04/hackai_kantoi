@@ -37,11 +37,22 @@ class OtpClient {
   Future<Map<String, dynamic>> _post(Map<String, dynamic> body) async {
     if (!configured) return {'ok': false, 'error': 'not_configured'};
     try {
-      // Apps Script answers with a redirect to the result; http follows it.
-      final res = await _http
+      // Apps Script answers a POST with a 302 to the result. Dart's http
+      // client does not follow redirects for POST, so fetch it ourselves.
+      var res = await _http
           .post(Uri.parse(url), headers: {'Content-Type': 'text/plain'}, body: jsonEncode({...body, 'appKey': appKey}))
           .timeout(const Duration(seconds: 20));
-      return jsonDecode(res.body) as Map<String, dynamic>;
+      for (var hops = 0; hops < 3 && (res.isRedirect || const [301, 302, 303, 307, 308].contains(res.statusCode)); hops++) {
+        final to = res.headers['location'];
+        if (to == null) break;
+        res = await _http.get(Uri.parse(url).resolve(to)).timeout(const Duration(seconds: 20));
+      }
+      try {
+        return jsonDecode(res.body) as Map<String, dynamic>;
+      } on FormatException {
+        // A web page instead of JSON: usually the script isn't deployed for "Anyone".
+        return {'ok': false, 'error': 'bad_reply', 'status': res.statusCode};
+      }
     } on TimeoutException {
       return {'ok': false, 'error': 'offline'};
     } catch (_) {
@@ -58,6 +69,7 @@ class OtpClient {
         'wrong' => "That code isn't right.",
         'not_configured' => 'Email codes are not set up in this build. Please use Google sign-in.',
         'offline' => "Couldn't reach Kantoi. Check your internet connection and try again.",
+        'bad_reply' => "Kantoi's email service gave an unexpected answer (HTTP ${r['status']}). Please use Google sign-in for now.",
         _ => 'Something went wrong. Please try again.',
       };
 }

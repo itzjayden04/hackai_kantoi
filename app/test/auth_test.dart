@@ -92,4 +92,28 @@ void main() {
     expect(hashPassword('x', 's', iterations: 10), hashPassword('x', 's', iterations: 10));
     expect(hashPassword('x', 's', iterations: 10), isNot(hashPassword('x', 't', iterations: 10)));
   });
+
+  test('the code service follows the Apps Script redirect after a POST', () async {
+    final client = OtpClient(
+      url: 'https://script.example/exec',
+      appKey: 'k',
+      client: MockClient((r) async {
+        if (r.method == 'POST') {
+          return http.Response('<html>Moved</html>', 302, headers: {'location': 'https://script.example/echo?x=1'});
+        }
+        expect(r.url.toString(), 'https://script.example/echo?x=1');
+        return http.Response(jsonEncode({'ok': true}), 200);
+      }),
+    );
+    expect(await client.send('a@b.com'), isNull);
+  });
+
+  test('a web page instead of JSON gives a clear message', () async {
+    final client = OtpClient(
+      url: 'https://script.example/exec',
+      appKey: 'k',
+      client: MockClient((r) async => http.Response('<html>Sign in</html>', 200)),
+    );
+    expect(await client.send('a@b.com'), contains('unexpected answer (HTTP 200)'));
+  });
 }
