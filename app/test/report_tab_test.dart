@@ -27,9 +27,10 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.text('Next'));
     await t.pumpAndSettle();
-    expect(find.textContaining('Step 1 of 4'), findsOneWidget);
+    expect(find.textContaining('STEP 1 OF 4'), findsOneWidget);
 
     await t.tap(find.text('In-app chat'));
+    await t.ensureVisible(find.widgetWithText(TextField, 'https://…'));
     await t.enterText(find.widgetWithText(TextField, 'https://…'), 'http://cheap-iphone.top');
     await t.tap(find.byTooltip('Add').last);
     await t.pumpAndSettle();
@@ -37,24 +38,30 @@ void main() {
       await t.tap(find.text('Next'));
       await t.pumpAndSettle();
     }
-    expect(find.textContaining('Step 3 of 4'), findsOneWidget);
+    expect(find.textContaining('STEP 3 OF 4'), findsOneWidget);
     await t.tap(find.text('Yes'));
     await t.pumpAndSettle();
-    await t.enterText(find.widgetWithText(TextField, '3,500.00'), '1299');
+    await t.enterText(find.widgetWithText(TextField, '0.00'), '1299');
+    await t.ensureVisible(find.text('Bank transfer'));
+    await t.pumpAndSettle();
     await t.tap(find.text('Bank transfer'));
+    await t.pumpAndSettle();
     await t.tap(find.text('Next'));
     await t.pumpAndSettle();
     await t.tap(find.text('Review'));
     await t.pumpAndSettle();
     expect(find.text('Review your report'), findsOneWidget);
-    expect(find.text('RM 1,299.00'), findsOneWidget);
+    expect(find.text('Yes · RM 1,299.00'), findsOneWidget);
+    expect(find.text('Bank transfer'), findsOneWidget, reason: 'payment method shows on review');
 
+    await t.ensureVisible(find.text('Submit report'));
+    await t.pumpAndSettle();
     await t.runAsync(() async {
       await t.tap(find.text('Submit report'));
       await Future<void>.delayed(const Duration(milliseconds: 200));
     });
     await t.pumpAndSettle();
-    expect(find.text('Report saved'), findsOneWidget);
+    expect(find.text('Report sent'), findsOneWidget);
     final r = reportStore.reports.first;
     expect(r.kind, 'commerce.fake_store');
     expect(r.status, ReportStatus.sent);
