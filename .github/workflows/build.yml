@@ -67,7 +67,10 @@ jobs:
       # Prints the signing certificate's fingerprints (public, not secret) so
       # the SHA-1 can be matched against the Google sign-in Android client.
       - name: Signing certificate
-        run: keytool -printcert -jarfile build/app/outputs/flutter-apk/app-release.apk | grep -E "Owner|SHA1|SHA256"
+        continue-on-error: true
+        run: |
+          SIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          "$SIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk | grep -E "DN|SHA-1|SHA-256" || true
       - run: cp build/app/outputs/flutter-apk/app-release.apk ../Kantoi-android.apk
       - uses: actions/upload-artifact@v4
         with:
