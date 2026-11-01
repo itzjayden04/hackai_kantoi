@@ -296,10 +296,18 @@ class AuthService extends ChangeNotifier {
       return null;
     } on GoogleSignInException catch (e) {
       if (e.code == GoogleSignInExceptionCode.canceled) return 'Sign-in cancelled.';
-      return "Google sign-in didn't work (${e.code.name}). Try again or register with email.";
+      return "Google sign-in didn't work (${e.code.name}${_detail(e.description)}). Try again or register with email.";
     } catch (e) {
-      return "Google sign-in didn't work. Try again or register with email.";
+      // Shows the underlying reason so a setup problem can be diagnosed.
+      return "Google sign-in didn't work (${_detail(e.toString(), first: true)}). Try again or register with email.";
     }
+  }
+
+  static String _detail(String? d, {bool first = false}) {
+    final t = (d ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (t.isEmpty) return '';
+    final cut = t.length > 120 ? '${t.substring(0, 120)}…' : t;
+    return first ? cut : ': $cut';
   }
 
   Future<void> signOut() async {
