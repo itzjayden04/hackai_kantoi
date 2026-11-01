@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../auth/account.dart';
 import '../../auth/auth_service.dart';
@@ -228,6 +229,56 @@ Widget _busyOr(bool busy, String label, {bool arrow = true}) => busy
         if (arrow) ...[const SizedBox(width: 8), const Icon(Icons.arrow_forward_rounded, size: 18)],
       ]);
 
+/// PDPA consent for Google sign-in: the box starts unticked, as on the
+/// register form.
+class _ConsentDialog extends StatefulWidget {
+  const _ConsentDialog();
+  @override
+  State<_ConsentDialog> createState() => _ConsentDialogState();
+}
+
+class _ConsentDialogState extends State<_ConsentDialog> {
+  bool _agreed = false;
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return AlertDialog(
+      icon: const TintIcon(Icons.privacy_tip_outlined, background: K.surfaceMid, size: 48),
+      title: const Text('Before you continue'),
+      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Kantoi uses your Google name and email for your account. Checks run on your phone, and only masked scam details are shared.',
+            style: t.bodyMedium?.copyWith(color: K.onSurfaceVariant)),
+        const SizedBox(height: 12),
+        InkWell(
+          onTap: () => setState(() => _agreed = !_agreed),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Checkbox(value: _agreed, onChanged: (v) => setState(() => _agreed = v ?? false)),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text.rich(TextSpan(style: t.bodyMedium, children: [
+                  const TextSpan(text: "I agree to Kantoi's "),
+                  TextSpan(
+                    text: 'Privacy Notice and Terms',
+                    style: const TextStyle(color: K.primary, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrivacyNoticePage())),
+                  ),
+                  const TextSpan(text: ' (PDPA 2010).'),
+                ])),
+              ),
+            ),
+          ]),
+        ),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+        FilledButton(onPressed: _agreed ? () => Navigator.pop(context, true) : null, child: const Text('Continue')),
+      ],
+    );
+  }
+}
+
 class _GoogleButton extends StatefulWidget {
   final VoidCallback onDone;
   const _GoogleButton({required this.onDone});
@@ -239,6 +290,10 @@ class _GoogleButtonState extends State<_GoogleButton> {
   bool _busy = false;
 
   Future<void> _go() async {
+    // Google accounts skip the register form, so they get the same unticked
+    // PDPA consent here before the first sign-in on this phone.
+    if (!await _consented()) return;
+    if (!mounted) return;
     setState(() => _busy = true);
     final err = await auth.signInGoogle();
     if (!mounted) return;
@@ -248,6 +303,24 @@ class _GoogleButtonState extends State<_GoogleButton> {
     } else if (err != 'Sign-in cancelled.') {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
     }
+  }
+
+  static const _kConsent = 'auth.googleConsent';
+
+  Future<bool> _consented() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      if (p.getString(_kConsent) == consentVersion) return true;
+    } catch (_) {}
+    if (!mounted) return false;
+    final ok = await showDialog<bool>(context: context, builder: (_) => const _ConsentDialog()) ?? false;
+    if (ok) {
+      try {
+        final p = await SharedPreferences.getInstance();
+        await p.setString(_kConsent, consentVersion);
+      } catch (_) {}
+    }
+    return ok;
   }
 
   @override
