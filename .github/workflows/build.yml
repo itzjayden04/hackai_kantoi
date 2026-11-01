@@ -71,6 +71,9 @@ jobs:
         run: |
           SIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
           "$SIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk | grep -E "DN|SHA-1|SHA-256" || true
+          M=build/app/outputs/mapping/release/mapping.txt
+          echo "R8 names (should map to themselves):"
+          grep -E "^(kotlin\.coroutines\.Continuation|kotlin\.Unit|kotlin\.Result|io\.flutter\.plugins\.sharedpreferences\.SharedPreferencesApi|io\.flutter\.plugins\.sharedpreferences\.SharedPreferencesAsyncApi) " "$M" || true
       - run: cp build/app/outputs/flutter-apk/app-release.apk ../Kantoi-android.apk
       - uses: actions/upload-artifact@v4
         with:
