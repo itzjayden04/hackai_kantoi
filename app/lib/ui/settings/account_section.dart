@@ -416,7 +416,7 @@ class _HistoryLogPageState extends State<HistoryLogPage> {
       body: ListenableBuilder(
         listenable: historyLog,
         builder: (context, _) {
-          final items = historyLog.filtered(type: _type, query: _q.text);
+          final items = historyLog.filtered(type: _type, query: _q.text)..sort((a, b) => b.at.compareTo(a.at));
           final now = DateTime.now();
           final counts = <String, int>{};
           for (final e in items) {

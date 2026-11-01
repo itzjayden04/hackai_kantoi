@@ -167,7 +167,7 @@ ThemeData buildTheme(Brightness b) {
     progressIndicatorTheme: ProgressIndicatorThemeData(color: scheme.primary, linearTrackColor: scheme.surfaceContainerHigh),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith((s) => Colors.white),
-      trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? K.green : scheme.outlineVariant),
+      trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? (dark ? K.green : K.primaryContainer) : scheme.outlineVariant),
       trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
     ),
     dividerTheme: DividerThemeData(color: scheme.outlineVariant.withValues(alpha: 0.5), space: 1),

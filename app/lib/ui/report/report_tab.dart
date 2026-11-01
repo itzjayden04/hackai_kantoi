@@ -750,8 +750,9 @@ Color groupColor(ScamGroup g) => switch (g) {
       ScamGroup.social => const Color(0xFFBE185D),
     };
 
-/// Top bar for the report steps: back, title and a close button that keeps a
-/// draft.
+/// Title bar for the report steps, with a close button that keeps a draft.
+/// [onBack] is kept for callers; the app bar's back arrow runs the same
+/// handler.
 class _Header extends StatelessWidget {
   final String title;
   final VoidCallback onBack;
@@ -759,10 +760,10 @@ class _Header extends StatelessWidget {
   const _Header({required this.title, required this.onBack, this.onClose});
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
+        // The app bar above already has the back arrow (it calls the same
+        // handler), so this bar only names the step and offers close.
+        padding: const EdgeInsets.fromLTRB(20, 4, 4, 4),
         child: Row(children: [
-          IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back_rounded), tooltip: 'Back'),
-          const SizedBox(width: 4),
           Expanded(child: Text(title, style: Theme.of(context).textTheme.titleLarge, maxLines: 1, overflow: TextOverflow.ellipsis)),
           if (onClose != null) IconButton(onPressed: onClose, icon: const Icon(Icons.close_rounded), tooltip: 'Close and keep a draft'),
         ]),
