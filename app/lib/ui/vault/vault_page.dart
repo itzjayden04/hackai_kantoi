@@ -91,28 +91,34 @@ class _VaultCardState extends State<VaultCard> {
     final t = Theme.of(context).textTheme;
     final n = vault.count;
     return KCard(
-      onTap: () => openVault(context),
-      child: Row(children: [
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(color: K.primaryContainer.withValues(alpha: 0.1), shape: BoxShape.circle),
-          child: const Icon(Icons.key_rounded, color: K.primaryContainer),
+      padding: const EdgeInsets.all(18),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const TintIcon(Icons.key_rounded, color: Color(0xFF8B4A00), background: K.tertiaryFixed, size: 48),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: Text('Safe word vault', style: t.titleMedium)),
+                const Pill('Encrypted', color: Color(0xFF8B4A00), icon: Icons.lock_rounded),
+              ]),
+              const SizedBox(height: 4),
+              Text(
+                n == 0
+                    ? 'Agree a secret word with family, so you can check who is really calling.'
+                    : "Check who's really calling. $n safe word${n == 1 ? '' : 's'} saved on this phone.",
+                style: t.bodyMedium?.copyWith(color: K.onSurfaceVariant),
+              ),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 14),
+        FilledButton.tonalIcon(
+          style: FilledButton.styleFrom(backgroundColor: K.surfaceMid, foregroundColor: K.primary, minimumSize: const Size(0, 48)),
+          icon: Icon(n == 0 ? Icons.add_rounded : Icons.lock_open_rounded, size: 20),
+          label: Text(n == 0 ? 'Set up the vault' : 'Open vault'),
+          onPressed: () => openVault(context),
         ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Safe word vault', style: t.titleMedium),
-            const SizedBox(height: 2),
-            Text(
-              n == 0
-                  ? 'Agree a secret word with family, so you can check who is really calling.'
-                  : "Check who's really calling. $n safe word${n == 1 ? '' : 's'} saved.",
-              style: t.bodySmall,
-            ),
-          ]),
-        ),
-        const Icon(Icons.chevron_right_rounded, color: K.outline),
       ]),
     );
   }

@@ -7,6 +7,10 @@ import 'guardian_ui.dart';
 import 'intel_page.dart' show IntelSettingsSection;
 import 'privacy_controls.dart';
 import 'settings/account_section.dart';
+import 'emergency/hotlines.dart';
+import 'emergency/widgets.dart';
+import 'limits_page.dart';
+import '../version.dart';
 import 'intake_widgets.dart';
 import 'kit.dart';
 import 'theme.dart';
@@ -195,6 +199,40 @@ class _SettingsPageState extends State<SettingsPage> {
           const PrivacyControls(),
         ],
       ),
+      const SizedBox(height: 8),
+      SettingsGroup('About Kantoi', rows: [
+        SettingsRow(Icons.help_outline_rounded, 'Limits of Kantoi',
+            subtitle: 'What it can and cannot catch', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LimitsPage()))),
+        const SettingsRow(Icons.info_outline_rounded, 'Version $appVersion', subtitle: 'Kantoi anti-scam assistant'),
+      ]),
+      KCard(
+        color: K.surfaceMid,
+        onTap: () => dial(nsrcNumber),
+        child: Row(children: [
+          const TintIcon(Icons.phone_in_talk_rounded, color: Colors.white, background: K.primary, size: 44),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('National Scam Response Centre', style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+              Text('NSRC Malaysia · 24 hours', style: t.bodySmall?.copyWith(color: K.secondary)),
+            ]),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: K.primary, minimumSize: const Size(0, 40)),
+            onPressed: () => dial(nsrcNumber),
+            child: const Text('Call 997'),
+          ),
+        ]),
+      ),
+      const SizedBox(height: 16),
+      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const Icon(Icons.lock_outline_rounded, size: 14, color: K.outline),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text('Checks run on your phone. Personal details are masked before anything goes online.',
+              textAlign: TextAlign.center, style: t.labelSmall?.copyWith(color: K.outline)),
+        ),
+      ]),
     ]);
   }
 }
@@ -215,11 +253,7 @@ class _Section extends StatelessWidget {
       child: KCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(color: K.surfaceMid, borderRadius: K.r8),
-              child: Icon(icon, size: 20, color: K.primary),
-            ),
+            TintIcon(icon, background: K.surfaceMid, size: 38, square: true),
             const SizedBox(width: 12),
             Expanded(child: Text(title, style: t.titleMedium)),
           ]),
