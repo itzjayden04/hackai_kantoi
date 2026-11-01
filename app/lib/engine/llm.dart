@@ -12,7 +12,11 @@ class LlmConfig {
   final String baseUrl;
   const LlmConfig({required this.kind, this.apiKey = '', this.model = '', this.baseUrl = ''});
 
-  static const _buildGeminiKey = String.fromEnvironment('GEMINI_API_KEY');
+  static const _key1 = String.fromEnvironment('GEMINI_API_KEY');
+  static const _key2 = String.fromEnvironment('GEMINI_API_KEY_2');
+
+  /// The first key, or the second one when a build was made without the first.
+  static const _buildGeminiKey = _key1.length > 0 ? _key1 : _key2;
 
   /// Default: Gemini with the key baked in at build time (if any).
   static const defaults = LlmConfig(kind: LlmKind.gemini, apiKey: _buildGeminiKey, model: 'gemini-flash-latest');
