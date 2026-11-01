@@ -17,23 +17,28 @@ class LimitsPage extends StatelessWidget {
     ('Messages with no warning words', 'A scammer who writes politely, with no link, no money request and no pressure, can look safe until the money request comes.'),
     ('Who is really behind an account', 'Kantoi judges messages and patterns. It cannot prove who a person is, and a relationship result is "consistent with" a scam, not proof.'),
     ('Brand-new scam scripts', 'The built-in checks know common Malaysian scams. A new trick may only be caught by the AI explanation, or not at all.'),
-    ('Languages other than English and Malay', 'Chinese, Tamil and other languages are not checked by the built-in rules.'),
+    ('Languages other than English and Malay', 'Chinese and Tamil are covered by a smaller set of rules. Other languages are not checked by the built-in rules.'),
     ('Websites that look fine today', 'A link can be safe when checked and changed later. Kantoi checks the link at the moment you ask.'),
   ];
 
   static const _reliability = [
     (
       'Built-in message checks',
-      'On 32 new test messages Kantoi had not been tuned on: when it says "Suspicious" or worse, it was right every time (precision 100%), '
-          'but it caught 2 in 3 scams (recall 67%). Counting "Be careful" as a warning, it caught 5 in 6 scams (83%) with 1 false alarm in 14 genuine messages.',
+      'On 44 test messages written before the latest update and never used to tune it: at "Suspicious" or worse it caught all 24 scams (recall 100%, up from 83%) '
+          'and wrongly flagged 1 of 20 genuine messages (a friend asking to borrow RM20). The test messages were written by the Kantoi team, not collected from real users.',
     ),
     (
       'On the set used to tune the rules',
-      '90 Malaysian messages in English, Malay and Manglish: precision 100%, recall 96% at "Suspicious". These numbers are optimistic because the rules were adjusted on this set.',
+      '90 Malaysian messages in English, Malay and Manglish: precision 100%, recall 100% at "Suspicious". These numbers are optimistic because the rules were adjusted on this set.',
     ),
     (
       'Link checks',
       'Finds look-alike bank and courier websites, new domains and redirects. Needs the internet; offline, only the address itself is checked.',
+    ),
+    (
+      'Community reports',
+      'Needs a signed-in account. One report never makes something a known scam: it takes three different verified accounts, and older reports count less. '
+          'Reports can be wrong or gamed, so they add to the other checks rather than replace them. Only websites and masked numbers are shared, never messages.',
     ),
     (
       'AI explanations',

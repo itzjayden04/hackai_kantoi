@@ -644,4 +644,5 @@ String cueTip(CueCategory c) => switch (c) {
       CueCategory.legitimacy => 'Real messages ask for nothing risky and point to the official app.',
       CueCategory.knownScam => 'The same number, account or website was already used in other scams.',
       CueCategory.file => 'Apps and files sent by message can steal your codes or take over your phone.',
+      CueCategory.scamPattern => 'Scammers reuse the same scripts, so the wording matches scams seen before.',
     };

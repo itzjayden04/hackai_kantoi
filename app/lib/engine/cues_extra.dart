@@ -160,6 +160,38 @@ final List<_Rule> _extraRules = [
       'Asks for a first deposit', 'Investment and job scams start with a small deposit, then ask for more.'),
   _Rule(CueCategory.urgency, '$_money.{0,40}\\b(quick(ly)?|fast|now|sekarang|right away|cepat|jap)\\b|\\b(quick(ly)?|fast)\\b.{0,30}$_money', 8,
       'Rushes you', 'Scammers rush you so you act before you think or check with someone.'),
+  // Investment: robots and "% a day" returns the main rule misses.
+  _Rule(CueCategory.investment, r'\b((ai|auto(mated)?|quant(itative)?|smart) ?(trading )?(robot|bot)s?|trading (robot|bot)s?|expert advisor|robot (trading|dagangan)|copy[- ]trad(e|ing))\b', 12,
+      'Trading robot pitch', 'Trading "robots" that promise steady profits are a common front for investment scams.'),
+  _Rule(CueCategory.investment, r'\b\d{1,3}(\.\d+)?\s?%\s?(a|per|every|setiap|tiap|each) ?(day|week|hari|minggu)\b|\b(untung|profit|returns?|pulangan|keuntungan)\b.{0,15}\b\d{1,3}(\.\d+)?\s?%\s?(sehari|harian|seminggu|mingguan|daily|weekly)\b', 14,
+      'Unrealistic returns', 'Steady daily or weekly returns of several percent do not exist in legitimate investing.'),
+  // Job and task scams: pay ranges and same-day pay.
+  _Rule(CueCategory.investment, r'\b(rm|\$)\s?\d{2,4}\s?(-|~|to|hingga|sampai|ke)\s?(rm|\$)?\s?\d{2,5}\b.{0,25}\b(a day|per day|daily|sehari|harian|setiap (hari|tugasan)|per task|each task|a week|seminggu)\b|\b(gaji|komisen|commission|pay|payment|salary)\b.{0,20}\b(masuk hari (yang )?sama|hari yang sama|same[- ]day|paid daily|dibayar setiap hari|harian)\b|\b(commission|komisen) (per|setiap|for each|bagi setiap) (task|tugasan|order)\b', 11,
+      'Easy-money job offer', 'Jobs that pay a lot for simple online tasks, paid the same day, are the bait of task scams that later ask for a deposit.'),
+  _Rule(CueCategory.investment, r'\b(like|follow|subscribe|review|rate|komen|comment)\b.{0,20}\b(videos?|video tiktok|youtube|tiktok|hotels?|products?|produk|shops?|kedai|google maps)\b.{0,60}\b(rm|\$|commission|komisen|gaji|earn|bayaran|income)', 10,
+      'Paid to like or review', 'Being paid to like videos or review hotels is the opening step of the job task scam.'),
+  // Untraceable transfer services.
+  _Rule(CueCategory.payment, r'\b(western union|moneygram|ria money transfer|money ?gram)\b', 10,
+      'Untraceable payment method', 'Cash transfer services are hard to trace or reverse, which is why scammers ask for them.'),
+  // Pay first.
+  _Rule(CueCategory.payment, r'\b(upfront|up-front|in advance|terlebih dahulu|dahulu)\b.{0,25}\b(fee|payment|bayaran|yuran|deposit|caj|charge)s?\b|\b(fee|yuran|bayaran|deposit|caj)s?\b.{0,20}\b(upfront|up-front|first|dulu|dahulu|terlebih dahulu|in advance)\b', 8,
+      'Pay a fee first', 'Being asked to pay before you get a loan, a job, a prize or your own money back is the core of advance-fee scams.'),
+  // Bank logins and mule accounts.
+  _Rule(CueCategory.credentials, r'\b(online banking|internet banking|bank(ing)?) (id|username|user ?id|login)( details)?\b.{0,20}\b(password|pin|kata laluan)\b|\b(id|username) (dan|and|&) (kata laluan|password)\b', 16,
+      'Asks for your banking login', 'Nobody legitimate needs your online banking ID and password. Whoever has them can empty your account.'),
+  _Rule(CueCategory.payment, r'\b(rent(ing)? (out )?(your |ur )?(unused )?(bank )?(account|acc)|sewa(kan)? akaun|jual akaun|beli akaun|account (for )?rent(al)?|pinjam(kan)? akaun)\b', 18,
+      'Wants to use your bank account', 'Renting or lending your bank account makes you a money mule. It is a crime in Malaysia and the account gets frozen.'),
+  // Codes sent to your phone.
+  _Rule.re(CueCategory.credentials, _re(r'\b(code|kod|otp|tac|pin)\b.{0,40}\b(sent to|dihantar ke|masuk (ke|dalam)|got sent to|went to)\s?(your|you|ur|anda|awak|kau)?\s?(phone|handphone|hp|number|nombor|whatsapp|sms)\b'), 20,
+      'Wants your code', 'Anyone asking about a code that was sent to your phone wants to take over your account.',
+      requires: _re(r'\b(send|reply|forward|screenshot|ss|hantar|bagi|give|share|tell|beritahu)\b')),
+  // Threats to cut something off.
+  _Rule(CueCategory.fear, r'\b(account|akaun|line|talian|number|nombor|whatsapp|supply|bekalan|service|perkhidmatan|card|kad)\b.{0,30}\b(will be|akan|to be)\s?(permanently |kekal )?(deactivated|terminated|disabled|cut( off)?|disconnected|closed|dipotong|ditamatkan|dinyahaktifkan|ditutup|diputuskan)\b', 10,
+      'Threatens to cut you off', 'Threats to close your account or cut your service are meant to make you act without checking.'),
+  // Reward points that expire today.
+  _Rule.re(CueCategory.reward, _re(r'\b(points?|mata ganjaran|rewards?|ganjaran)\b.{0,40}\b(expir\w*|tamat|luput)\b.{0,15}\b(today|tonight|hari ini|malam ini|esok|tomorrow|soon|in \d+ (hours?|jam))\b'), 10,
+      'Points expiring today', 'Fake "your points expire today" messages push you to a link to "redeem" them.',
+      requires: _re(r'\b(redeem|tebus|claim|tuntut|link|pautan|url|http|www)\b')),
   // Fake officer (Macau scam) call script, in English and Malay.
   _Rule(CueCategory.fear, r'\b(your|anda|awak)?\s?(ic|mykad|identity card|kad pengenalan|bank account|akaun bank)\b.{0,40}\b(linked|involved|used|terlibat|digunakan|dikaitkan)\b.{0,40}\b(money laundering|laundering|pengubahan wang haram|drug|dadah|fraud|penipuan|crime|jenayah|syndicate|sindiket)\b', 22,
       _officer, _officerWhy),

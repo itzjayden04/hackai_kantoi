@@ -18,3 +18,7 @@ key.properties
 
 # Local API keys for flutter run --dart-define-from-file (never commit)
 secrets.json
+
+# Firebase config files (settings come from secrets.json instead)
+google-services.json
+GoogleService-Info.plist

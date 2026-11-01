@@ -95,6 +95,8 @@ final List<_Rule> _legitRules = [
       'Points you to the official app', 'Genuine messages send you to the official app instead of a link.'),
 ];
 
+final _warnsNotToShare = RegExp(r"\b(never|do not|don'?t|jangan)\b.{0,15}\b(share|give|reveal|disclose|kongsi|dedahkan|beri)\b",
+    caseSensitive: false);
 final _zeroWidth = RegExp(r'[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]', unicode: true);
 final _aiInjection = RegExp(
   r'(ignore (all |any )?(previous|prior|above) (instructions|rules)|you are (an? )?(ai|assistant|language model)|(ai|assistant|scanner|checker|model)s?:? (this|the) (message|link) (is|has been) (verified|safe|legit)|mark (this|it) as safe|classify (this|it) as (safe|legitimate)|system prompt)',
@@ -174,7 +176,12 @@ List<Finding> detectCues(String text) {
       tool: 'Prompt-injection guard',
     ));
   }
-  out.addAll(detectExtraCues(text));
+  final extra = detectExtraCues(text);
+  // "Never share your user ID and password" is a warning, not a request.
+  if (out.any((f) => f.title == 'Security warning') || _warnsNotToShare.hasMatch(text)) {
+    extra.removeWhere((f) => f.title == 'Asks for your banking login');
+  }
+  out.addAll(extra);
   return out;
 }
 

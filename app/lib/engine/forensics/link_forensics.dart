@@ -173,6 +173,9 @@ Future<LinkForensics> deepLinkCheck(
           if (l.brandsSeen.isNotEmpty) 'mentions ${l.brandsSeen.take(2).join(', ')}',
           if (l.offsiteForms.isNotEmpty) 'form sends to ${l.offsiteForms.first}',
           if (l.hiddenRedirect != null) 'hidden redirect',
+          if (l.exfiltration != null) 'script posts to ${l.exfiltration}',
+          if (l.hotlinkedFrom.isNotEmpty) 'logos loaded from the real ${l.hotlinkedFrom.first} site',
+          ...l.evasions,
         ];
         s
           ..result = '$isolationNote. ${l.title == null ? 'No page title' : 'Title "${l.title}"'}; '

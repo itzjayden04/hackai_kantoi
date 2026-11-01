@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../engine/llm.dart';
 import '../state.dart';
+import 'account/auth_pages.dart';
 import 'forensic_settings.dart';
 import 'guardian_ui.dart';
 import 'intel_page.dart' show IntelSettingsSection;
@@ -69,6 +70,11 @@ class _SettingsPageState extends State<SettingsPage> {
     final t = Theme.of(context).textTheme;
     final hasBuiltIn = LlmConfig.defaults.apiKey.isNotEmpty;
     return PageBody(children: [
+      const _Section(
+        icon: Icons.account_circle_outlined,
+        title: 'Account',
+        children: [AccountSection()],
+      ),
       _Section(
         icon: Icons.auto_awesome_outlined,
         title: 'AI explanations',

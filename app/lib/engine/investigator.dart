@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:http/http.dart' as http;
 
+import 'community/community.dart';
+
 import 'attribution/attribution.dart';
 import '../intake/language.dart';
 import 'cues.dart';
@@ -53,6 +55,9 @@ class InvestigateOptions {
   final WebIntelCache? webCache;
   /// For tests: where website purpose and reputation checks are kept.
   final SiteCache? siteCache;
+  /// Reports from other Kantoi users. Null uses [communityIntel], which the
+  /// app sets when the user is signed in.
+  final CommunityIntel? community;
   const InvestigateOptions({
     this.llm = LlmConfig.defaults,
     this.network = true,
@@ -63,6 +68,7 @@ class InvestigateOptions {
     this.webLookup = true,
     this.webCache,
     this.siteCache,
+    this.community,
   });
 }
 
@@ -237,7 +243,13 @@ Future<Investigation> investigate(
   findings.addAll(attribution.findings);
   onStep?.call(List.of(log));
 
-  // 3c. Wait for the web reports (and add those found for the websites).
+  // 3c. Community reports: what other Kantoi users said about the same
+  // numbers, accounts and websites.
+  final tallies = await _community(entities, options, step, done);
+  findings.addAll(communityFindings(tallies));
+  onStep?.call(List.of(log));
+
+  // 3d. Wait for the web reports (and add those found for the websites).
   final web = [...await webFuture, for (final s in sites) ?s.web];
   findings.addAll(webIntelFindings(web));
   onStep?.call(List.of(log));
@@ -308,7 +320,7 @@ Future<Investigation> investigate(
 
   // 5. Score.
   final scoreStep = step('Risk scorer', 'Combining all evidence');
-  final verdict = _verdict(findings, reports, ai, log, entities, extras, web, sites);
+  final verdict = _verdict(findings, reports, ai, log, entities, extras, web, sites, tallies);
   done(scoreStep, '${verdict.score}/100, ${verdictLabel(verdict.level, findings)} (confidence ${verdict.confidence}%)');
 
   final inv = Investigation(
@@ -316,6 +328,35 @@ Future<Investigation> investigate(
   attachWebIntel(inv, web);
   attachSites(inv, sites);
   return inv;
+}
+
+Future<List<CommunityTally>> _community(List<Entity> entities, InvestigateOptions options,
+    LogStep Function(String tool, String action, {bool sentOffDevice}) step, void Function(LogStep, String, [StepStatus]) done) async {
+  final store = options.community ?? communityIntel;
+  final ids = indicatorsIn(entities, ownDetails: options.ownDetails);
+  if (store == null || ids.isEmpty) return const [];
+  final s = step(communityTool, 'Checking what other Kantoi users reported about ${ids.map((i) => i.display).join(', ')}',
+      sentOffDevice: true);
+  if (!options.network) {
+    done(s, 'Offline: online checks are off', StepStatus.skipped);
+    return const [];
+  }
+  try {
+    final t = await store.lookup(ids).timeout(const Duration(seconds: 8));
+    final hits = t.where((x) => x.reports.isNotEmpty).toList();
+    done(
+        s,
+        hits.isEmpty
+            ? 'No reports yet from other users'
+            : hits
+                .map((x) => '${x.indicator.display}: ${x.scamCount} scam, ${x.legitCount} genuine '
+                    '(${scoreTally(x).level.name})')
+                .join('; '));
+    return t;
+  } catch (e) {
+    done(s, 'Could not reach community reports ($e)', StepStatus.failed);
+    return const [];
+  }
 }
 
 /// The verdict label. A low score with no sign that the item is genuine is
@@ -332,7 +373,7 @@ String _entityName(EntityType t) => switch (t) {
     };
 
 Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai, List<LogStep> log, List<Entity> entities,
-    [IntakeExtras? extras, List<WebIntelResult> web = const [], List<SiteReport> sites = const []]) {
+    [IntakeExtras? extras, List<WebIntelResult> web = const [], List<SiteReport> sites = const [], List<CommunityTally> tallies = const []]) {
   // Each category counts once at full weight so a long message can't pile up
   // points by repeating the same word.
   final byCat = <CueCategory, int>{};
@@ -371,6 +412,10 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
   if (sf == RiskLevel.danger && score < 65) score = 65;
   if (sf == RiskLevel.suspicious && score < 40) score = 40;
   if (sf == RiskLevel.caution && score < 18) score = 18;
+  // So do many independent reports from other Kantoi users.
+  final cf = communityFloor(tallies);
+  if (cf == RiskLevel.danger && score < 65) score = 65;
+  if (cf == RiskLevel.suspicious && score < 40) score = 40;
   final level = levelFor(score);
   final reported = web.where((r) => r.reported).toList();
   final riskySite = ([...sites.where((s) => s.purpose.risky)]..sort((a, b) => b.purpose.level.index - a.purpose.level.index)).firstOrNull;
@@ -393,6 +438,11 @@ Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai
               ? 'Unclear'
               : _guessType(byCat, urls, legit < 0));
   if (scamType.isEmpty) scamType = 'Unclear';
+  // The scam the wording matches, when nothing more specific was found.
+  final simType = f.where((x) => x.category == CueCategory.scamPattern).map((x) => x.title.replaceFirst('Worded like a known ', '')).firstOrNull;
+  if (simType != null && simType.isNotEmpty && level != RiskLevel.safe && const {'Unclear', 'Suspicious message'}.contains(scamType)) {
+    scamType = simType[0].toUpperCase() + simType.substring(1);
+  }
   if (sitePurpose != null && const {'Unclear', 'Legitimate message', 'Suspicious message', 'Prize scam'}.contains(scamType)) {
     scamType = scamTypeFor(sitePurpose);
   }

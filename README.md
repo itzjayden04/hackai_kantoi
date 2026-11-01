@@ -81,12 +81,12 @@ Kantoi follows the eight branches of the product blueprint.
      - **Before you pay:** opening a banking or e-wallet app soon after a risky chat shows a pause card first.
      - Every warning is a notification; tapping it opens the Trace.
 2. **Investigate it.**
-   - **Words:** pressure words are highlighted, including Malay, Manglish, Chinese and Tamil. Kantoi also catches disguised spelling and says which step of a known scam script the message has reached.
-   - **Links:** every redirect is followed in a locked-down way, and each hop shows its domain age, certificate, hosting country, brand look-alike checks and the login form on the page. Kantoi also checks whether the page shows phone visitors something different, and looks the link up in safety lists. With a VirusTotal key, the link and its website are checked against 70+ security companies, and a link VirusTotal has never seen gets a fresh scan. Links that point into your own home or phone network are never opened.
+   - **Words:** pressure words are highlighted, including Malay, Manglish, Chinese and Tamil. Kantoi also catches disguised spelling (look-alike letters, "O T P" written letter by letter) and says which step of a known scam script the message has reached. A similarity check compares the wording with known scam and genuine messages, so a reworded scam script is still recognised.
+   - **Links:** every redirect is followed in a locked-down way, and each hop shows its domain age, certificate, hosting country, brand look-alike checks and the login form on the page. The page reader also spots scripts that post what you type to a Telegram bot or Discord webhook, logos loaded straight from the real bank's site, and pages that block right-click or scramble their code. Kantoi also checks whether the page shows phone visitors something different, and looks the link up in safety lists. With a VirusTotal key, the link and its website are checked against 70+ security companies, and a link VirusTotal has never seen gets a fresh scan. Links that point into your own home or phone network are never opened.
    - **Files and apps:** risky app permissions, macros and links inside documents, and forged letterheads are flagged.
    - **Genuine messages:** an official-sender list and known-good templates let a real message come out as "Looks legitimate".
 3. **Relationship check.** It runs by itself when you open a chat (see the chat badge above). You can also score a WhatsApp or Telegram chat export, or answer 9 questions instead. The score looks at how you met, how fast money came up, texting rhythm, story contradictions and copy-paste replies. It also spots a hijacked friend's account, and shows a risk timeline with the key messages highlighted.
-4. **Who's behind it.** The Trace tab starts a live investigation from any link, number, account, email or whole message. The map grows as each real lookup returns: redirects, domain registration, DNS, hosting company and country, certificates and certificate logs, look-alike brands and links to earlier cases. Every lookup appears in a timestamped log, and the findings export as a police PDF. Kantoi also keeps a scam map on your device. It draws on certificate logs, public phishing feeds, domain records, news and approved reports. Shared nameservers, accounts, numbers and message scripts link items into campaigns, which you can explore as a network. Tracing a number or account also searches the web for public scam reports and links to Semak Mule. Campaigns are named; people never are.
+4. **Who's behind it.** The Trace tab starts a live investigation from any link, number, account, email or whole message. The map grows as each real lookup returns: redirects, domain registration, DNS, hosting company and country, certificates and certificate logs, look-alike brands and links to earlier cases. Every lookup appears in a timestamped log, and the findings export as a police PDF. Kantoi also keeps a scam map on your device. It draws on certificate logs, public phishing feeds, domain records, news and approved reports. Shared nameservers, accounts, numbers and message scripts link items into campaigns, which you can explore as a network. Tracing a number or account also searches the web for public scam reports and links to Semak Mule. Campaigns are named; people never are. Signed-in users also see what other Kantoi users reported about the same website, number or account (see [community reports](#accounts-and-community-reports-firebase)).
 5. **Explain it.** You get the answer, the reasons highlighted in the message and the full evidence, with an honest confidence level and what would change the verdict. Buttons say "This was actually legit" or "This was actually a scam", and an "Honest limits" page shows measured accuracy (see [docs/evaluation.md](docs/evaluation.md)).
 6. **Act on it.**
    - **Emergency tab:** a "Call 997" button, the call script, a "what to do right now" checklist that remembers what you have done, and verified bank fraud hotlines.
@@ -118,6 +118,36 @@ The app works without these. Each one switches on one extra online check. Add th
 | `URLSCAN_API_KEY` | A screenshot of the scam page from a remote isolated browser |
 | `ABUSECH_AUTH_KEY` | URLhaus feed for the scam map and link checks |
 | `TELEGRAM_BOT_TOKEN` | The Kantoi Telegram bot, while the app is open |
+| `FIREBASE_API_KEY`, `FIREBASE_APP_ID`, `FIREBASE_PROJECT_ID`, `FIREBASE_SENDER_ID`, `FIREBASE_STORAGE_BUCKET` | Accounts (register, sign in, forgot password) and community scam reports. See [Accounts and community reports](#accounts-and-community-reports-firebase) |
+
+### Accounts and community reports (Firebase)
+
+Without the Firebase keys the app runs exactly as before, with no sign-in screen. With them:
+
+- **Register, sign in, forgot password.** Email and password through Firebase Authentication, with email verification. People can still choose "Continue without an account": checking messages never needs one.
+- **Community reports.** When a signed-in, verified user taps "This was actually a scam" (or "legit"), Kantoi shares the website, or a masked phone number, bank account or email, with other users. The message itself never leaves the phone. Store paths are SHA-256 hashes, so full numbers are never stored.
+- **Reputation.** Every check looks those up and scores them: one report per account, older reports count less (full weight for 90 days, 60% to 180 days, then 30%), and genuine reports pull the score back. It takes three independent scam reports to call something a known scam, so one person (or one fake account) cannot brand a number. Three or more reports make the verdict at least "Suspicious"; five or more make it "Very likely a scam". The relationship check uses the same reports for "Already reported by others".
+
+Setup (about 10 minutes):
+
+1. In the [Firebase console](https://console.firebase.google.com), create a project and add an **Android app** with package name `my.kantoi.kantoi` (no need to download `google-services.json`).
+2. **Authentication** > Sign-in method: turn on **Email/Password**. Under Templates you can change the verification and password reset emails.
+3. **Firestore Database**: create it (production mode, region `asia-southeast1`), then publish the rules in [`firestore.rules`](firestore.rules) (paste them under Rules, or run `firebase deploy --only firestore:rules`).
+4. Project settings > General > Your apps: copy the values into `app/secrets.json` next to your other keys:
+
+```json
+{
+  "FIREBASE_API_KEY": "AIza...",
+  "FIREBASE_APP_ID": "1:1234567890:android:abc123",
+  "FIREBASE_PROJECT_ID": "kantoi-demo",
+  "FIREBASE_SENDER_ID": "1234567890",
+  "FIREBASE_STORAGE_BUCKET": "kantoi-demo.firebasestorage.app"
+}
+```
+
+5. Run with `flutter run --dart-define-from-file=secrets.json`. For GitHub Actions, add the same five values as repository secrets.
+
+The Firebase API key identifies the project; it is not a password. The security rules are what protect the data: users can only read and write their own profile, only verified accounts can report, each account has one report per item, and nothing can be read without signing in.
 
 ## Demo script (about 4 minutes)
 

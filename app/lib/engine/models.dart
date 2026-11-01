@@ -97,6 +97,7 @@ enum CueCategory {
   legitimacy,
   knownScam,
   file,
+  scamPattern,
 }
 
 String cueLabel(CueCategory c) => switch (c) {
@@ -117,6 +118,7 @@ String cueLabel(CueCategory c) => switch (c) {
       CueCategory.legitimacy => 'Sign of legitimacy',
       CueCategory.knownScam => 'Known scam',
       CueCategory.file => 'Risky file or app',
+      CueCategory.scamPattern => 'Matches known scam wording',
     };
 
 /// One piece of evidence. [weight] is positive for risk, negative for

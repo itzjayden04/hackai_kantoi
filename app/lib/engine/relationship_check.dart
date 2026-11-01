@@ -127,11 +127,11 @@ Future<List<RelSignal>> linkedReports(
 ) async {
   final counter = linkedReportCounter;
   if (counter == null || ids.isEmpty) {
-    step('Linked reports', ids.isEmpty ? 'Skipped: no account, number or link to look up' : 'Skipped: scam database not available')
+    step('Linked reports', ids.isEmpty ? 'Skipped: no account, number or link to look up' : 'Skipped: sign in to use community scam reports')
         .status = StepStatus.skipped;
     return const [];
   }
-  final s = step('Linked reports', 'Looking up ${ids.length} account number(s), phone number(s) or link(s) in the scam database on your device');
+  final s = step('Linked reports', 'Looking up ${ids.length} account number(s), phone number(s) or link(s) in scam reports from other Kantoi users', sentOffDevice: true);
   try {
     final n = await counter(ids);
     done(s, n > 0 ? 'Found in $n earlier report(s)' : 'Not found in earlier reports');

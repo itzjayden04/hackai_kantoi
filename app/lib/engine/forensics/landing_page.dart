@@ -14,6 +14,14 @@ class LandingReport {
   /// A redirect done by a refresh tag or script, which plain redirects miss.
   final Uri? hiddenRedirect;
   final String? hiddenRedirectKind;
+  /// Where the page posts what you type when it is not a normal form, e.g.
+  /// "a Telegram bot" (read from the page's scripts, never run).
+  final String? exfiltration;
+  /// Official sites the page loads its logos and styles from.
+  final Set<String> hotlinkedFrom;
+  /// Tricks that stop people inspecting the page (right-click blocked,
+  /// scrambled script).
+  final List<String> evasions;
   final List<Finding> findings;
   const LandingReport({
     this.title,
@@ -25,6 +33,9 @@ class LandingReport {
     this.offsiteForms = const [],
     this.hiddenRedirect,
     this.hiddenRedirectKind,
+    this.exfiltration,
+    this.hotlinkedFrom = const {},
+    this.evasions = const [],
     this.findings = const [],
   });
 }
@@ -56,16 +67,56 @@ final _loginRe = RegExp(
     r'\b(log ?in|sign ?in|log masuk|daftar masuk|username|user id|id pengguna|kata laluan|secure ?word|online banking|perbankan internet)\b',
     caseSensitive: false);
 
+/// Services phishing kits post stolen logins to, straight from the page.
+const Map<String, String> _exfilEndpoints = {
+  r'api\.telegram\.org/bot': 'a Telegram bot',
+  r'discord(app)?\.com/api/webhooks': 'a Discord webhook',
+  r'hooks\.slack\.com/services': 'a Slack webhook',
+  r'script\.google\.com/macros/s/': 'a Google Apps Script',
+  r'webhook\.site/': 'a webhook.site address',
+  r'formspree\.io/f/': 'a Formspree form',
+  r'getform\.io/f/': 'a Getform form',
+  r'submit-form\.com/': 'a submit-form.com form',
+  r'formsubmit\.co/': 'a FormSubmit form',
+  r'api\.ipify\.org|ipapi\.co/json|ip-api\.com/json': 'a visitor-tracking service',
+};
+/// Big platforms whose images and styles appear on ordinary sites (share
+/// buttons, embeds, affiliate pictures), so loading from them proves nothing.
+const _embeddedEverywhere = {'Google', 'Facebook', 'Microsoft', 'Apple', 'WhatsApp', 'Telegram', 'PayPal', 'Netflix', 'Shopee', 'Lazada', 'Grab'};
+final _resourceRe = RegExp(r'''<(?:img|link)\b[^>]*\b(?:src|href)\s*=\s*["']?(https?://[^"'\s>]+)''', caseSensitive: false);
+final _noRightClickRe = RegExp(
+    r'''oncontextmenu\s*=\s*["']?\s*return\s+false|addEventListener\(\s*["']contextmenu["']|event\.button\s*==+\s*2|keyCode\s*==+\s*123|key\s*==+\s*["']F12["']|devtools(open|detect|-detect)''',
+    caseSensitive: false);
+final _scrambledRe = RegExp(
+    r'''eval\s*\(\s*(atob|unescape|decodeURIComponent|function\s*\(\s*p\s*,\s*a\s*,\s*c\s*,\s*k\s*,\s*e)|document\.write\s*\(\s*(unescape|atob)\s*\(|\\x[0-9a-f]{2}(\\x[0-9a-f]{2}){40,}|["'][A-Za-z0-9+/=]{800,}["']''',
+    caseSensitive: false);
+final _countdownRe = RegExp(
+    r'\b(offer|link|session|page|tawaran|pautan) (expires|ends|tamat) in\b|\b(countdown|count-down)\b.{0,200}\b(setInterval|setTimeout)\b|\b\d{1,2}:\d{2}\s*(minutes?|minit|left|lagi)\b',
+    caseSensitive: false);
+
 String _attr(String tag, String name) {
   final m = RegExp('\\b$name\\s*=\\s*["\']?([^"\'>]*)', caseSensitive: false).firstMatch(tag);
   return (m?.group(1) ?? '').toLowerCase();
 }
 
-String _visibleText(String html) => html
-    .replaceAll(RegExp(r'<script[\s\S]*?</script>|<style[\s\S]*?</style>', caseSensitive: false), ' ')
+/// The text a visitor sees: no scripts, styles, comments or tags, with the
+/// common HTML entities decoded.
+String visibleText(String html) => html
+    .replaceAll(RegExp(r'<!--[\s\S]*?-->'), ' ')
+    .replaceAll(RegExp(r'<(script|style|noscript|template|svg)\b[\s\S]*?</\1>', caseSensitive: false), ' ')
     .replaceAll(RegExp(r'<[^>]+>'), ' ')
-    .replaceAll(RegExp(r'&nbsp;'), ' ')
-    .replaceAll(RegExp(r'\s+'), ' ');
+    .replaceAllMapped(RegExp(r'&#(x[0-9a-f]+|\d+);', caseSensitive: false), (m) {
+      final v = m[1]!.toLowerCase().startsWith('x') ? int.tryParse(m[1]!.substring(1), radix: 16) : int.tryParse(m[1]!);
+      return v == null || v > 0x10FFFF ? ' ' : String.fromCharCode(v);
+    })
+    .replaceAll('&nbsp;', ' ')
+    .replaceAll('&amp;', '&')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();
 
 /// Reads a landing page's HTML for the signs of a phishing page.
 LandingReport analyzeLandingHtml(String html, Uri page) {
@@ -86,7 +137,7 @@ LandingReport analyzeLandingHtml(String html, Uri page) {
     if (RegExp(r'cc-number|cardnumber|card_number|card-number|card ?no|cvv|cvc|cc-csc|cc-exp|expiry|nombor kad').hasMatch(ids)) card = true;
   }
 
-  final text = _visibleText(html);
+  final text = visibleText(html);
   final titleAndText = '${title ?? ''} $text'.toLowerCase();
   final seen = <String>{};
   // Brands in the title or a logo count more than a passing mention.
@@ -139,6 +190,29 @@ LandingReport analyzeLandingHtml(String html, Uri page) {
     }
   }
 
+  // Where scripts send what you type, read without running them.
+  String? exfil;
+  for (final e in _exfilEndpoints.entries) {
+    if (RegExp(e.key, caseSensitive: false).hasMatch(html)) {
+      exfil = e.value;
+      break;
+    }
+  }
+  // Logos and styles loaded straight from a real brand's website.
+  final hotlinked = <String>{};
+  if (official == null) {
+    for (final m in _resourceRe.allMatches(html)) {
+      final h = Uri.tryParse(m.group(1)!)?.host.toLowerCase() ?? '';
+      final b = h.isEmpty ? null : officialBrandFor(h);
+      if (b != null && !_embeddedEverywhere.contains(b) && registrableDomain(h) != registrableDomain(host)) hotlinked.add(b);
+    }
+  }
+  final evasions = [
+    if (_noRightClickRe.hasMatch(html)) 'blocks right-click or developer tools',
+    if (_scrambledRe.hasMatch(html)) 'scrambled script',
+  ];
+  final countdown = _countdownRe.hasMatch(html);
+
   // Findings. A real brand page on its own domain is fine.
   if (official == null) {
     final fakeOf = seen.where((b) => brands.containsKey(b)).toList();
@@ -166,6 +240,28 @@ LandingReport analyzeLandingHtml(String html, Uri page) {
     add(CueCategory.credentials, 'Sends what you type to another website',
         'A form on this page sends your answers to ${offsite.first}, a different website from the one you see.', 12);
   }
+  final secrets = password || otp || card;
+  // Without a box to type into, only chat bots are telling: ordinary sites
+  // use forms services and IP lookups too.
+  if (exfil != null && official == null && (secrets || exfil.contains('bot') || exfil.contains('Discord'))) {
+    add(CueCategory.credentials, secrets ? 'Sends what you type to $exfil' : 'Page reports to $exfil',
+        secrets
+            ? 'The page\'s script posts what you type straight to $exfil. Phishing kits use this to collect stolen logins and codes.'
+            : 'The page\'s script contacts $exfil, which phishing kits use to collect visitors\' details.',
+        secrets ? 26 : 10);
+  }
+  if (hotlinked.isNotEmpty) {
+    add(CueCategory.impersonation, 'Borrows ${hotlinked.first}\'s logos from the real site',
+        'The page loads its pictures or styles straight from the official ${hotlinked.first} website, so it looks real, but $host is not ${hotlinked.first}.',
+        16);
+  }
+  if (evasions.isNotEmpty && official == null) {
+    add(CueCategory.obfuscation, 'Hides how the page works',
+        'The page ${evasions.join(' and ')}. Genuine sites have no reason to stop you looking.', 8);
+  }
+  if (countdown && official == null && (password || otp || card || seen.isNotEmpty)) {
+    add(CueCategory.urgency, 'Countdown timer on the page', 'A ticking timer rushes you into typing your details before you think.', 6);
+  }
   if (hidden != null) {
     add(CueCategory.link, 'Sends you on with a hidden redirect',
         'The page moves you to ${hidden.host} using a $hiddenKind, a trick used to hide the final page from link checkers.', 6);
@@ -181,6 +277,9 @@ LandingReport analyzeLandingHtml(String html, Uri page) {
     offsiteForms: offsite,
     hiddenRedirect: hidden,
     hiddenRedirectKind: hiddenKind,
+    exfiltration: exfil,
+    hotlinkedFrom: hotlinked,
+    evasions: evasions,
     findings: findings,
   );
 }

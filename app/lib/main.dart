@@ -3,12 +3,14 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'account/account.dart';
 import 'guard/guard_background.dart';
 import 'guard/guard_control.dart';
 import 'local_store.dart';
 import 'intake/share_intake.dart';
 import 'intake/telegram_bot.dart';
 import 'state.dart';
+import 'ui/account/auth_pages.dart';
 import 'ui/case_tracker.dart';
 import 'ui/check/result_page.dart';
 import 'ui/check_page.dart';
@@ -25,6 +27,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await appState.load();
   await localStore.load();
+  // Accounts and community reports (off when Firebase is not configured).
+  await startAccounts();
   await startTelegramBot();
   final firstRun = guardSupported && !await setupSeen();
   runApp(KantoiApp(firstRun: firstRun));
@@ -57,7 +61,12 @@ class _KantoiAppState extends State<KantoiApp> {
     themeMode: ThemeMode.light,
     home: AnimatedSwitcher(
       duration: K.medium,
-      child: _setup ? SetupFlow(key: const ValueKey('setup'), onDone: () => setState(() => _setup = false)) : const Shell(),
+      child: _setup
+          ? SetupFlow(
+              key: const ValueKey('setup'),
+              onDone: () => setState(() => _setup = false),
+            )
+          : const AuthGate(key: ValueKey('app'), child: Shell()),
     ),
   );
 }
@@ -91,20 +100,28 @@ class _ShellState extends State<Shell> {
       return;
     }
     final now = DateTime.now();
-    if (_exitAsked != null && now.difference(_exitAsked!) < const Duration(seconds: 2)) {
+    if (_exitAsked != null &&
+        now.difference(_exitAsked!) < const Duration(seconds: 2)) {
       SystemNavigator.pop();
       return;
     }
     _exitAsked = now;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('Press back again to close Kantoi'), duration: Duration(seconds: 2)));
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Press back again to close Kantoi'),
+          duration: Duration(seconds: 2),
+        ),
+      );
   }
 
   @override
   void initState() {
     super.initState();
-    appState.openResult = (inv) => navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => ResultPage(inv: inv)));
+    appState.openResult = (inv) => navigatorKey.currentState?.push(
+      MaterialPageRoute(builder: (_) => ResultPage(inv: inv)),
+    );
     appState.tab.addListener(_onTab);
     listenForShares(() => appState.tab.value = 0);
   }
@@ -137,7 +154,13 @@ class _ShellState extends State<Shell> {
       child: Scaffold(
         extendBody: true,
         appBar: AppBar(
-          leading: tab == 0 ? null : IconButton(tooltip: 'Back', icon: const Icon(Icons.arrow_back_rounded), onPressed: _onBack),
+          leading: tab == 0
+              ? null
+              : IconButton(
+                  tooltip: 'Back',
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  onPressed: _onBack,
+                ),
           titleSpacing: tab == 0 ? 16 : 0,
           title: const KantoiLogo(),
           actions: [
@@ -171,12 +194,17 @@ class _ShellState extends State<Shell> {
                           opacity: i == tab ? 1 : 0,
                           duration: K.fast,
                           child: AnimatedSlide(
-                            offset: i == tab ? Offset.zero : const Offset(0, 0.02),
+                            offset: i == tab
+                                ? Offset.zero
+                                : const Offset(0, 0.02),
                             duration: K.medium,
                             curve: K.curve,
                             child: TickerMode(
                               enabled: i == tab,
-                              child: KeyedSubtree(key: ValueKey(i), child: _page(i)),
+                              child: KeyedSubtree(
+                                key: ValueKey(i),
+                                child: _page(i),
+                              ),
                             ),
                           ),
                         ),
@@ -186,7 +214,11 @@ class _ShellState extends State<Shell> {
             ),
           ],
         ),
-        bottomNavigationBar: _GlassNav(index: tab, items: _tabs, onTap: (i) => appState.tab.value = i),
+        bottomNavigationBar: _GlassNav(
+          index: tab,
+          items: _tabs,
+          onTap: (i) => appState.tab.value = i,
+        ),
       ),
     );
   }
@@ -197,7 +229,11 @@ class _GlassNav extends StatelessWidget {
   final int index;
   final List<(IconData, IconData, String)> items;
   final ValueChanged<int> onTap;
-  const _GlassNav({required this.index, required this.items, required this.onTap});
+  const _GlassNav({
+    required this.index,
+    required this.items,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -207,7 +243,9 @@ class _GlassNav extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.85),
-            border: Border(top: BorderSide(color: K.outlineVariant.withValues(alpha: 0.5))),
+            border: Border(
+              top: BorderSide(color: K.outlineVariant.withValues(alpha: 0.5)),
+            ),
           ),
           child: SafeArea(
             top: false,
@@ -219,7 +257,11 @@ class _GlassNav extends StatelessWidget {
                     Expanded(
                       child: InkResponse(
                         onTap: () => onTap(i),
-                        child: _NavItem(item: items[i], selected: i == index, danger: i == 3),
+                        child: _NavItem(
+                          item: items[i],
+                          selected: i == index,
+                          danger: i == 3,
+                        ),
                       ),
                     ),
                 ],
@@ -236,7 +278,11 @@ class _NavItem extends StatelessWidget {
   final (IconData, IconData, String) item;
   final bool selected;
   final bool danger;
-  const _NavItem({required this.item, required this.selected, required this.danger});
+  const _NavItem({
+    required this.item,
+    required this.selected,
+    required this.danger,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -247,9 +293,14 @@ class _NavItem extends StatelessWidget {
         AnimatedContainer(
           duration: K.medium,
           curve: K.curve,
-          padding: EdgeInsets.symmetric(horizontal: selected ? 18 : 10, vertical: 4),
+          padding: EdgeInsets.symmetric(
+            horizontal: selected ? 18 : 10,
+            vertical: 4,
+          ),
           decoration: BoxDecoration(
-            color: selected ? (danger ? K.red : K.primary).withValues(alpha: 0.1) : Colors.transparent,
+            color: selected
+                ? (danger ? K.red : K.primary).withValues(alpha: 0.1)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(99),
           ),
           child: Icon(selected ? item.$2 : item.$1, color: c, size: 24),
@@ -257,7 +308,11 @@ class _NavItem extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           item.$3,
-          style: TextStyle(fontSize: 11, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: c),
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: c,
+          ),
         ),
       ],
     );
@@ -272,7 +327,8 @@ class ProtectedPill extends StatefulWidget {
   State<ProtectedPill> createState() => _ProtectedPillState();
 }
 
-class _ProtectedPillState extends State<ProtectedPill> with WidgetsBindingObserver {
+class _ProtectedPillState extends State<ProtectedPill>
+    with WidgetsBindingObserver {
   GuardStatus? _s;
 
   @override
@@ -311,7 +367,9 @@ class _ProtectedPillState extends State<ProtectedPill> with WidgetsBindingObserv
         child: InkWell(
           customBorder: const StadiumBorder(),
           onTap: () async {
-            await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProtectionPage()));
+            await Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const ProtectionPage()));
             _refresh();
           },
           child: Padding(
@@ -323,11 +381,19 @@ class _ProtectedPillState extends State<ProtectedPill> with WidgetsBindingObserv
                     ? PulseDot(color: c, size: 7)
                     : Padding(
                         padding: const EdgeInsets.all(4),
-                        child: Icon(Icons.error_outline_rounded, size: 14, color: c),
+                        child: Icon(
+                          Icons.error_outline_rounded,
+                          size: 14,
+                          color: c,
+                        ),
                       ),
                 Text(
                   _s == null ? '...' : (on ? 'Protected' : 'Turn on'),
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: c,
+                  ),
                 ),
               ],
             ),

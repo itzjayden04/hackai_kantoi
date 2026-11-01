@@ -1,0 +1,58 @@
+rules_version = '2';
+
+// Kantoi Firestore rules. Deploy with: firebase deploy --only firestore:rules
+//
+//   users/{uid}                              the user's own profile
+//   indicators/{kind_hash}/reports/{uid}     one community report per account
+//
+// Indicator ids are SHA-256 hashes and displays are masked, so full phone
+// numbers and bank accounts are never stored. Messages are never uploaded.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isUser(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function verified() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+
+    match /users/{uid} {
+      allow read, delete: if isUser(uid);
+      allow create, update: if isUser(uid)
+        && request.resource.data.keys().hasOnly(['name', 'email', 'createdAt', 'lastLoginAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.email == request.auth.token.email;
+    }
+
+    match /indicators/{key}/reports/{uid} {
+      // Reading needs an account, so the reports can't be scraped anonymously.
+      allow read: if signedIn();
+
+      // One report per verified account per indicator; the server sets the time.
+      allow create, update: if verified() && request.auth.uid == uid
+        && key.matches('^(domain|phone|bankAccount|wallet|email)_[0-9a-f]{40}$')
+        && request.resource.data.keys().hasOnly(['verdict', 'kind', 'display', 'scamType', 'at'])
+        && request.resource.data.verdict in ['scam', 'legit']
+        && request.resource.data.kind in ['domain', 'phone', 'bankAccount', 'wallet', 'email']
+        && key.split('_')[0] == request.resource.data.kind
+        && request.resource.data.display is string
+        && request.resource.data.display.size() <= 80
+        && (!('scamType' in request.resource.data)
+            || (request.resource.data.scamType is string && request.resource.data.scamType.size() <= 60))
+        && request.resource.data.at == request.time;
+
+      allow delete: if isUser(uid);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
