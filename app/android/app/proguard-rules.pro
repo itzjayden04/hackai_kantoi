@@ -11,3 +11,15 @@
 -keep class io.flutter.plugins.pathprovider.** { *; }
 -keep class com.github.dart_lang.jni.** { *; }
 -keep class com.github.dart_lang.jni_flutter.** { *; }
+
+# The JNI method signatures above also name Kotlin runtime classes
+# (e.g. setBool(..., Lkotlin/coroutines/Continuation;)). If R8 renames those,
+# the signature no longer matches and the lookup fails, so keep their names.
+-keep class kotlin.Unit { *; }
+-keep class kotlin.Result { *; }
+-keep class kotlin.Result$Failure { *; }
+-keep class kotlin.coroutines.Continuation { *; }
+-keep class kotlin.coroutines.CoroutineContext { *; }
+-keep class kotlin.coroutines.intrinsics.** { *; }
+-keep class kotlin.enums.EnumEntries { *; }
+-keep class kotlin.jvm.internal.DefaultConstructorMarker { *; }
