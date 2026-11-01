@@ -21,6 +21,12 @@ abstract class AuthBackend {
   Future<KantoiUser> signInGoogle({required String id, required String email, required String name, DateTime? now});
 
   Future<void> deleteAccount(KantoiUser u);
+
+  /// True when an email-and-password account uses [email].
+  Future<bool> hasPasswordAccount(String email);
+
+  /// Sets a new password after the email code was verified ([proof]).
+  Future<void> resetPassword(String email, String password, {required String proof});
 }
 
 class AuthProblem implements Exception {
@@ -109,6 +115,25 @@ class LocalAuthBackend implements AuthBackend {
   Future<void> deleteAccount(KantoiUser u) async {
     final all = await _all();
     all.removeWhere((a) => (a['user'] as Map)['uid'] == u.uid);
+    await _save(all);
+  }
+
+  @override
+  Future<bool> hasPasswordAccount(String email) async {
+    final e = email.trim().toLowerCase();
+    return (await _all()).any((a) => (a['user'] as Map)['email'] == e && a['hash'] != null);
+  }
+
+  @override
+  Future<void> resetPassword(String email, String password, {required String proof}) async {
+    if (proof.isEmpty) throw const AuthProblem('Please verify your email first.');
+    final e = email.trim().toLowerCase();
+    final all = await _all();
+    final a = all.where((a) => (a['user'] as Map)['email'] == e && a['hash'] != null).firstOrNull;
+    if (a == null) throw const AuthProblem('No account uses this email.', field: 'email');
+    final salt = _id();
+    a['salt'] = salt;
+    a['hash'] = hashPassword(password, salt);
     await _save(all);
   }
 }
@@ -220,6 +245,31 @@ class AuthService extends ChangeNotifier {
       return null;
     } on AuthProblem catch (e) {
       return e.message;
+    }
+  }
+
+  /// Forgot password, step 1: sends a code if an email account exists.
+  Future<String?> startReset(String email) async {
+    final e = email.trim().toLowerCase();
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(e)) return 'Enter the email you registered with.';
+    if (!await backend.hasPasswordAccount(e)) return 'No email account uses this address. Did you sign up with Google?';
+    if (!emailCodes) return 'Email codes are not set up in this build.';
+    return otp.send(e);
+  }
+
+  /// Forgot password, step 2: checks the code, sets the new password and
+  /// signs in.
+  Future<String?> finishReset(String email, String code, String password) async {
+    if (passwordStrength(password) < 1 || password.length < 8) return 'Use at least 8 characters with letters and numbers.';
+    final e = email.trim().toLowerCase();
+    final v = await otp.verify(e, code.trim());
+    if (!v.ok) return v.triesLeft == null ? v.problem : '${v.problem} ${v.triesLeft} tries left.';
+    try {
+      await backend.resetPassword(e, password, proof: v.proof!);
+      await _setUser(await backend.signInPassword(e, password));
+      return null;
+    } on AuthProblem catch (x) {
+      return x.message;
     }
   }
 

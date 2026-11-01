@@ -112,10 +112,10 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> {
   static const _tabs = [
     (Icons.shield_outlined, Icons.shield_rounded, 'Check'),
-    (Icons.hub_outlined, Icons.hub_rounded, 'Trace'),
+    (Icons.travel_explore_outlined, Icons.travel_explore_rounded, 'Trace'),
     (Icons.flag_outlined, Icons.flag_rounded, 'Report'),
     (Icons.school_outlined, Icons.school_rounded, 'Learn'),
-    (Icons.emergency_outlined, Icons.emergency_rounded, 'Emergency'),
+    (Icons.sos_outlined, Icons.sos_rounded, 'Emergency'),
   ];
   // Tabs are built the first time they are opened, then kept alive so a
   // running trace or check survives switching tabs.
@@ -235,7 +235,8 @@ class _ShellState extends State<Shell> {
   }
 }
 
-/// Frosted bottom bar with a sliding highlight; Emergency is always red.
+/// Frosted 80px bottom bar: a 64x32 tinted pill marks the open tab, and a
+/// red dot on Report means a report draft is waiting.
 class _GlassNav extends StatelessWidget {
   final int index;
   final List<(IconData, IconData, String)> items;
@@ -250,22 +251,28 @@ class _GlassNav extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.85),
-            border: Border(top: BorderSide(color: K.outlineVariant.withValues(alpha: 0.5))),
+            boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, -1))],
           ),
           child: SafeArea(
             top: false,
             child: SizedBox(
-              height: 68,
-              child: Row(
-                children: [
-                  for (var i = 0; i < items.length; i++)
-                    Expanded(
-                      child: InkResponse(
-                        onTap: () => onTap(i),
-                        child: _NavItem(item: items[i], selected: i == index, danger: i == tabEmergency),
+              height: 72,
+              child: ListenableBuilder(
+                listenable: reportStore,
+                builder: (context, _) => Row(
+                  children: [
+                    for (var i = 0; i < items.length; i++)
+                      Expanded(
+                        child: InkResponse(
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            onTap(i);
+                          },
+                          child: _NavItem(item: items[i], selected: i == index, badge: i == tabReport && reportStore.openDraft != null),
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -278,32 +285,47 @@ class _GlassNav extends StatelessWidget {
 class _NavItem extends StatelessWidget {
   final (IconData, IconData, String) item;
   final bool selected;
-  final bool danger;
-  const _NavItem({required this.item, required this.selected, required this.danger});
+  final bool badge;
+  const _NavItem({required this.item, required this.selected, required this.badge});
 
   @override
   Widget build(BuildContext context) {
-    final c = danger ? K.red : (selected ? K.primary : K.outline);
+    final c = selected ? K.primary : K.secondary;
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        AnimatedContainer(
-          duration: K.medium,
-          curve: K.curve,
-          padding: EdgeInsets.symmetric(horizontal: selected ? 18 : 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: selected ? (danger ? K.red : K.primary).withValues(alpha: 0.1) : Colors.transparent,
-            borderRadius: BorderRadius.circular(99),
+        AnimatedScale(
+          scale: selected ? 1 : 0.94,
+          duration: K.fast,
+          curve: Curves.easeOutBack,
+          child: AnimatedContainer(
+            duration: K.medium,
+            curve: K.curve,
+            width: 64,
+            height: 32,
+            decoration: BoxDecoration(color: selected ? K.primaryFixed : Colors.transparent, borderRadius: BorderRadius.circular(99)),
+            child: Stack(alignment: Alignment.center, children: [
+              Icon(selected ? item.$2 : item.$1, color: c, size: 22),
+              if (badge)
+                Positioned(
+                  top: 6,
+                  right: 18,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(color: K.error, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 1.5)),
+                  ),
+                ),
+            ]),
           ),
-          child: Icon(selected ? item.$2 : item.$1, color: c, size: 24),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 4),
         Text(
           item.$3,
           maxLines: 1,
           overflow: TextOverflow.fade,
           softWrap: false,
-          style: TextStyle(fontSize: 11, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: c),
+          style: TextStyle(fontSize: 12, height: 16 / 12, letterSpacing: 0.24, fontWeight: FontWeight.w600, color: c),
         ),
       ],
     );

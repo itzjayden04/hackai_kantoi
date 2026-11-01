@@ -10,7 +10,7 @@ import '../kit.dart';
 import '../theme.dart';
 import 'privacy_notice.dart';
 
-enum _Page { login, register, code }
+enum _Page { login, register, code, forgot }
 
 /// Log in or create an account. Every user signs in once; Kantoi logs out
 /// after 7 days without opening the app. [onDone] continues into the app.
@@ -35,24 +35,17 @@ class _AuthFlowState extends State<AuthFlow> {
 
   void _expiredDialog() {
     if (!mounted) return;
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        icon: const Icon(Icons.lock_clock_outlined, color: K.primary, size: 36),
-        title: const Text('Please log in again'),
-        content: const Text(
-            "You haven't opened Kantoi for 7 days, so we logged you out to keep your account safe. Phone protection is still on."),
-        actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
-      ),
-    );
+    showDialog<void>(context: context, builder: (ctx) => _ExpiredDialog(onDone: widget.onDone));
     auth.expired = false;
   }
+
+  void _go(_Page p) => setState(() => _page = p);
 
   @override
   Widget build(BuildContext context) => PopScope(
         canPop: _page == _Page.login,
         onPopInvokedWithResult: (did, _) {
-          if (!did) setState(() => _page = _page == _Page.code ? _Page.register : _Page.login);
+          if (!did) _go(_page == _Page.code ? _Page.register : _Page.login);
         },
         child: Scaffold(
           body: SafeArea(
@@ -65,13 +58,14 @@ class _AuthFlowState extends State<AuthFlow> {
                 _Page.login => _Login(
                     key: const ValueKey('login'),
                     onDone: widget.onDone,
-                    onRegister: () => setState(() => _page = _Page.register),
+                    onRegister: () => _go(_Page.register),
+                    onForgot: () => _go(_Page.forgot),
                   ),
                 _Page.register => _Register(
                     key: const ValueKey('register'),
                     initial: _pending,
                     onDone: widget.onDone,
-                    onBack: () => setState(() => _page = _Page.login),
+                    onBack: () => _go(_Page.login),
                     onCodeSent: (r) => setState(() {
                       _pending = r;
                       _page = _Page.code;
@@ -80,9 +74,10 @@ class _AuthFlowState extends State<AuthFlow> {
                 _Page.code => _Code(
                     key: const ValueKey('code'),
                     reg: _pending!,
-                    onBack: () => setState(() => _page = _Page.register),
+                    onBack: () => _go(_Page.register),
                     onDone: widget.onDone,
                   ),
+                _Page.forgot => _Forgot(key: const ValueKey('forgot'), onBack: () => _go(_Page.login), onDone: widget.onDone),
               },
             ),
           ),
@@ -90,16 +85,148 @@ class _AuthFlowState extends State<AuthFlow> {
       );
 }
 
-class _Logo extends StatelessWidget {
-  const _Logo();
+// ------------------------------------------------------------ shared parts
+
+/// Top bar of the sign-in screens: back arrow and the screen name.
+class _TopBar extends StatelessWidget {
+  final String title;
+  final VoidCallback? onBack;
+  const _TopBar(this.title, {this.onBack});
   @override
-  Widget build(BuildContext context) => Container(
-        width: 56,
+  Widget build(BuildContext context) => SizedBox(
         height: 56,
-        decoration: const BoxDecoration(color: K.primaryContainer, borderRadius: K.r16),
-        child: const Icon(Icons.shield_rounded, color: Colors.white, size: 32),
+        child: Row(children: [
+          if (onBack != null) IconButton(onPressed: onBack, tooltip: 'Back', icon: const Icon(Icons.arrow_back_rounded)) else const SizedBox(width: 16),
+          const Icon(Icons.verified_user_outlined, color: K.primary, size: 20),
+          const SizedBox(width: 6),
+          Text('KANTOI', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: K.onSurfaceVariant, letterSpacing: 1.2)),
+          Expanded(child: Text(title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleMedium)),
+          const SizedBox(width: 92),
+        ]),
       );
 }
+
+class _Hero extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool round;
+  const _Hero({required this.icon, required this.title, required this.subtitle, this.round = false});
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return Column(children: [
+      const SizedBox(height: 12),
+      TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.7, end: 1),
+        duration: K.medium,
+        curve: Curves.easeOutBack,
+        builder: (_, s, c) => Transform.scale(scale: s, child: c),
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: K.primaryContainer,
+            borderRadius: round ? null : K.r16,
+            shape: round ? BoxShape.circle : BoxShape.rectangle,
+            boxShadow: K.shadow,
+          ),
+          child: Icon(icon, color: Colors.white, size: 30),
+        ),
+      ),
+      const SizedBox(height: 16),
+      Text(title, textAlign: TextAlign.center, style: t.headlineMedium),
+      const SizedBox(height: 4),
+      Text(subtitle, textAlign: TextAlign.center, style: t.bodyMedium?.copyWith(color: K.secondary)),
+      const SizedBox(height: 24),
+    ]);
+  }
+}
+
+/// Label above a tinted input box, with an optional state icon on the right.
+class _Field extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final IconData icon;
+  final String? hint;
+  final String? error;
+  final bool obscure;
+  final Widget? trailing;
+  final TextInputType? keyboard;
+  final List<String>? autofill;
+  final String? prefix;
+  final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onSubmitted;
+  final TextCapitalization caps;
+  const _Field({
+    required this.label,
+    required this.controller,
+    required this.icon,
+    this.hint,
+    this.error,
+    this.obscure = false,
+    this.trailing,
+    this.keyboard,
+    this.autofill,
+    this.prefix,
+    this.onChanged,
+    this.onSubmitted,
+    this.caps = TextCapitalization.none,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        FieldLabel(label,
+            trailing: error != null ? Text('Check this', style: t.labelSmall?.copyWith(color: K.error)) : null),
+        TextField(
+          controller: controller,
+          obscureText: obscure,
+          keyboardType: keyboard,
+          autofillHints: autofill,
+          textCapitalization: caps,
+          onChanged: onChanged,
+          onSubmitted: onSubmitted,
+          decoration: InputDecoration(
+            hintText: hint,
+            fillColor: error != null ? K.errorContainer.withValues(alpha: 0.35) : null,
+            prefixIcon: Icon(icon, color: error != null ? K.error : K.secondary, size: 20),
+            prefix: prefix == null
+                ? null
+                : Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: K.surfaceMid, borderRadius: BorderRadius.circular(6)),
+                    child: Text(prefix!, style: t.labelMedium),
+                  ),
+            suffixIcon: error != null ? const Icon(Icons.error_rounded, color: K.error, size: 20) : trailing,
+          ),
+        ),
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 2),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.info_outline_rounded, size: 16, color: K.error),
+              const SizedBox(width: 6),
+              Expanded(child: Text(error!, style: t.bodySmall?.copyWith(color: K.error))),
+            ]),
+          ),
+      ]),
+    );
+  }
+}
+
+const _ok = Padding(padding: EdgeInsets.all(12), child: Icon(Icons.check_circle_rounded, color: K.primaryContainer, size: 20));
+
+Widget _busyOr(bool busy, String label, {bool arrow = true}) => busy
+    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+    : Row(mainAxisSize: MainAxisSize.min, children: [
+        Text(label),
+        if (arrow) ...[const SizedBox(width: 8), const Icon(Icons.arrow_forward_rounded, size: 18)],
+      ]);
 
 class _GoogleButton extends StatefulWidget {
   final VoidCallback onDone;
@@ -124,32 +251,107 @@ class _GoogleButtonState extends State<_GoogleButton> {
   }
 
   @override
-  Widget build(BuildContext context) => OutlinedButton(
-        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 52), backgroundColor: Colors.white),
-        onPressed: _busy ? null : _go,
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          _busy
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('G', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: Color(0xFF4285F4))),
-          const SizedBox(width: 12),
-          const Text('Continue with Google'),
-        ]),
+  Widget build(BuildContext context) => DecoratedBox(
+        decoration: const BoxDecoration(borderRadius: K.r12, boxShadow: K.shadow),
+        child: OutlinedButton(
+          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 52), backgroundColor: Colors.white, side: BorderSide.none, foregroundColor: K.onSurface),
+          onPressed: _busy ? null : _go,
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            _busy ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const _GoogleG(),
+            const SizedBox(width: 12),
+            const Text('Continue with Google'),
+          ]),
+        ),
+      );
+}
+
+/// The four-colour Google "G", drawn so no image asset is needed.
+class _GoogleG extends StatelessWidget {
+  const _GoogleG();
+  @override
+  Widget build(BuildContext context) => ShaderMask(
+        shaderCallback: (r) => const SweepGradient(
+          colors: [Color(0xFFEA4335), Color(0xFFFBBC05), Color(0xFF34A853), Color(0xFF4285F4), Color(0xFFEA4335)],
+          stops: [0.0, 0.3, 0.55, 0.8, 1.0],
+          startAngle: 3.6,
+          endAngle: 3.6 + 6.283,
+        ).createShader(r),
+        child: const Text('G', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 21, color: Colors.white, height: 1)),
       );
 }
 
 Widget _or(BuildContext context) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 18),
       child: Row(children: [
-        const Expanded(child: Divider()),
-        Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text('or', style: Theme.of(context).textTheme.bodySmall)),
-        const Expanded(child: Divider()),
+        const Expanded(child: Divider(color: K.surfaceHigh)),
+        Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text('OR', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: K.secondary, letterSpacing: 1))),
+        const Expanded(child: Divider(color: K.surfaceHigh)),
       ]),
     );
+
+class _ExpiredDialog extends StatelessWidget {
+  final VoidCallback onDone;
+  const _ExpiredDialog({required this.onDone});
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 26, 22, 20),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Center(
+            child: Stack(clipBehavior: Clip.none, children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: K.shadow),
+                child: const Icon(Icons.lock_clock_outlined, color: K.primaryContainer, size: 30),
+              ),
+              Positioned(
+                right: 2,
+                bottom: 4,
+                child: Container(width: 12, height: 12, decoration: const BoxDecoration(color: K.onTertiaryContainer, shape: BoxShape.circle)),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 16),
+          Text('Please log in again', textAlign: TextAlign.center, style: t.headlineSmall),
+          const SizedBox(height: 8),
+          Text("You haven't opened Kantoi for 7 days, so we logged you out to keep your account safe. Phone protection is still on.",
+              textAlign: TextAlign.center, style: t.bodyMedium?.copyWith(color: K.secondary)),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(color: K.green.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(99)),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.verified_outlined, color: K.green, size: 18),
+              const SizedBox(width: 8),
+              Flexible(child: Text('Phone protection keeps running', style: t.labelLarge?.copyWith(color: K.green))),
+            ]),
+          ),
+          const SizedBox(height: 16),
+          _GoogleButton(onDone: () {
+            Navigator.pop(context);
+            onDone();
+          }),
+          const SizedBox(height: 10),
+          FilledButton(onPressed: () => Navigator.pop(context), child: _busyOr(false, 'Log in')),
+        ]),
+      ),
+    );
+  }
+}
+
+// ------------------------------------------------------------------ login
 
 class _Login extends StatefulWidget {
   final VoidCallback onDone;
   final VoidCallback onRegister;
-  const _Login({super.key, required this.onDone, required this.onRegister});
+  final VoidCallback onForgot;
+  const _Login({super.key, required this.onDone, required this.onRegister, required this.onForgot});
   @override
   State<_Login> createState() => _LoginState();
 }
@@ -185,54 +387,64 @@ class _LoginState extends State<_Login> {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    return ListView(padding: const EdgeInsets.fromLTRB(24, 32, 24, 24), children: [
-      const Align(alignment: Alignment.centerLeft, child: _Logo()),
-      const SizedBox(height: 20),
-      Text('Welcome to Kantoi', style: t.headlineMedium),
-      const SizedBox(height: 4),
-      Text('Log in to keep Kantoi protecting you.', style: t.bodyMedium?.copyWith(color: K.onSurfaceVariant)),
-      const SizedBox(height: 24),
-      _GoogleButton(onDone: widget.onDone),
-      _or(context),
-      TextField(
-        controller: _id,
-        keyboardType: TextInputType.emailAddress,
-        autofillHints: const [AutofillHints.username],
-        decoration: const InputDecoration(labelText: 'Username or email', prefixIcon: Icon(Icons.person_outline_rounded)),
-      ),
-      const SizedBox(height: 12),
-      TextField(
-        controller: _pw,
-        obscureText: _hide,
-        autofillHints: const [AutofillHints.password],
-        onSubmitted: (_) => _login(),
-        decoration: InputDecoration(
-          labelText: 'Password',
-          prefixIcon: const Icon(Icons.lock_outline_rounded),
-          suffixIcon: IconButton(icon: Icon(_hide ? Icons.visibility_outlined : Icons.visibility_off_outlined), onPressed: () => setState(() => _hide = !_hide)),
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 24), children: [
+      const _TopBar('Sign in'),
+      const _Hero(icon: Icons.shield_outlined, title: 'Welcome back', subtitle: 'Log in to keep Kantoi protecting you.'),
+      KCard(
+        padding: const EdgeInsets.all(18),
+        child: AutofillGroup(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            _GoogleButton(onDone: widget.onDone),
+            _or(context),
+            _Field(
+              label: 'Username or email',
+              controller: _id,
+              icon: Icons.person_outline_rounded,
+              hint: 'e.g. ahmad_razak or name@example.com',
+              keyboard: TextInputType.emailAddress,
+              autofill: const [AutofillHints.username],
+            ),
+            _Field(
+              label: 'Password',
+              controller: _pw,
+              icon: Icons.lock_outline_rounded,
+              hint: 'Enter your password',
+              obscure: _hide,
+              autofill: const [AutofillHints.password],
+              onSubmitted: (_) => _login(),
+              trailing: IconButton(
+                  icon: Icon(_hide ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: K.secondary),
+                  onPressed: () => setState(() => _hide = !_hide)),
+            ),
+            Align(alignment: Alignment.centerRight, child: TextButton(onPressed: widget.onForgot, child: const Text('Forgot password?'))),
+            if (_err != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(_err!, style: t.bodySmall?.copyWith(color: K.error))),
+            const SizedBox(height: 4),
+            FilledButton(onPressed: _busy ? null : _login, child: _busyOr(_busy, 'Log in')),
+          ]),
         ),
       ),
-      if (_err != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_err!, style: t.bodySmall?.copyWith(color: K.red))),
-      const SizedBox(height: 20),
-      FilledButton(
-        style: FilledButton.styleFrom(minimumSize: const Size(0, 52)),
-        onPressed: _busy ? null : _login,
-        child: _busy ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Log in'),
+      const SizedBox(height: 18),
+      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Text('New to Kantoi?', style: t.bodyMedium?.copyWith(color: K.secondary)),
+        TextButton(onPressed: widget.onRegister, child: const Text('Create an account', style: TextStyle(fontSize: 16))),
+      ]),
+      const SizedBox(height: 8),
+      Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(color: K.surfaceLow, borderRadius: BorderRadius.circular(99)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.lock_outline_rounded, size: 16, color: K.secondary),
+            const SizedBox(width: 8),
+            Flexible(child: Text('Phone protection keeps running even when you are logged out.', style: t.labelMedium?.copyWith(color: K.secondary))),
+          ]),
+        ),
       ),
-      const SizedBox(height: 12),
-      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text('New to Kantoi?', style: t.bodyMedium),
-        TextButton(onPressed: widget.onRegister, child: const Text('Create an account')),
-      ]),
-      const SizedBox(height: 24),
-      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        const Icon(Icons.lock_outline_rounded, size: 14, color: K.outline),
-        const SizedBox(width: 6),
-        Flexible(child: Text('Phone protection keeps running even when you are logged out.', style: t.labelSmall?.copyWith(color: K.outline))),
-      ]),
     ]);
   }
 }
+
+// --------------------------------------------------------------- register
 
 class _Register extends StatefulWidget {
   final Registration? initial;
@@ -287,69 +499,135 @@ class _RegisterState extends State<_Register> {
     if (p.isEmpty) direct ? widget.onDone() : widget.onCodeSent(r);
   }
 
+  void _clear(String key) {
+    if (_err.containsKey(key)) setState(() => _err = Map.of(_err)..remove(key));
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final strength = passwordStrength(_pw.text);
-    const sc = [K.red, K.amber, K.green, K.green];
-    const sl = ['Weak', 'Okay', 'Strong', 'Very strong'];
-    InputDecoration dec(String label, IconData icon, String key, {Widget? suffix, String? prefix}) =>
-        InputDecoration(labelText: label, prefixIcon: Icon(icon), errorText: _err[key], suffixIcon: suffix, prefixText: prefix);
-    return ListView(padding: const EdgeInsets.fromLTRB(24, 8, 24, 24), children: [
-      Align(alignment: Alignment.centerLeft, child: IconButton(onPressed: widget.onBack, icon: const Icon(Icons.arrow_back_rounded))),
-      Text('Create your account', style: t.headlineMedium),
-      const SizedBox(height: 4),
-      Text('One account keeps your reports and history safe.', style: t.bodyMedium?.copyWith(color: K.onSurfaceVariant)),
-      const SizedBox(height: 20),
+    final strength = _pw.text.isEmpty ? -1 : passwordStrength(_pw.text);
+    final sc = [K.error, K.onTertiaryContainer, K.primaryContainer, K.primaryContainer];
+    const sl = ['Weak', 'Okay', 'Strong password', 'Very strong'];
+    final userOk = RegExp(r'^[a-zA-Z0-9_.]{3,}$').hasMatch(_user.text.trim());
+    final match = _pw2.text.isNotEmpty && _pw2.text == _pw.text;
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 24), children: [
+      _TopBar('Register', onBack: widget.onBack),
+      const _Hero(icon: Icons.verified_user_rounded, title: 'Create your account', subtitle: 'One account keeps your reports and history safe.'),
       _GoogleButton(onDone: widget.onDone),
       _or(context),
-      TextField(controller: _name, textCapitalization: TextCapitalization.words, decoration: dec('Full name', Icons.badge_outlined, 'fullName')),
-      const SizedBox(height: 12),
-      TextField(controller: _email, keyboardType: TextInputType.emailAddress, decoration: dec('Email address', Icons.mail_outline_rounded, 'email')),
-      const SizedBox(height: 12),
-      TextField(controller: _phone, keyboardType: TextInputType.phone, decoration: dec('Phone number (optional)', Icons.phone_outlined, 'phone')),
-      const SizedBox(height: 12),
-      TextField(controller: _user, decoration: dec('Username', Icons.alternate_email_rounded, 'username')),
-      const SizedBox(height: 12),
-      TextField(
-        controller: _pw,
-        obscureText: _hide,
-        onChanged: (_) => setState(() {}),
-        decoration: dec('Password', Icons.lock_outline_rounded, 'password',
-            suffix: IconButton(icon: Icon(_hide ? Icons.visibility_outlined : Icons.visibility_off_outlined), onPressed: () => setState(() => _hide = !_hide))),
+      KCard(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 6),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _Field(
+              label: 'Full name',
+              controller: _name,
+              icon: Icons.person_outline_rounded,
+              hint: 'e.g. Ahmad Razak',
+              caps: TextCapitalization.words,
+              error: _err['fullName'],
+              onChanged: (_) => _clear('fullName')),
+          _Field(
+              label: 'Email address',
+              controller: _email,
+              icon: Icons.mail_outline_rounded,
+              hint: 'name@example.com',
+              keyboard: TextInputType.emailAddress,
+              error: _err['email'],
+              onChanged: (_) => _clear('email')),
+          if (_err['email']?.contains('Log in') == true)
+            Align(alignment: Alignment.centerLeft, child: TextButton(onPressed: widget.onBack, child: const Text('Log in instead'))),
+          _Field(
+              label: 'Phone number (optional)',
+              controller: _phone,
+              icon: Icons.call_outlined,
+              hint: '12 345 6789',
+              prefix: '+60',
+              keyboard: TextInputType.phone,
+              error: _err['phone'],
+              onChanged: (_) => _clear('phone')),
+          _Field(
+              label: 'Username',
+              controller: _user,
+              icon: Icons.alternate_email_rounded,
+              hint: 'ahmad_razak',
+              error: _err['username'],
+              trailing: userOk ? _ok : null,
+              onChanged: (_) {
+                _clear('username');
+                setState(() {});
+              }),
+          _Field(
+            label: 'Password',
+            controller: _pw,
+            icon: Icons.lock_outline_rounded,
+            hint: 'At least 8 characters',
+            obscure: _hide,
+            error: _err['password'],
+            onChanged: (_) {
+              _clear('password');
+              setState(() {});
+            },
+            trailing: IconButton(
+                icon: Icon(_hide ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: K.secondary),
+                onPressed: () => setState(() => _hide = !_hide)),
+          ),
+          Transform.translate(
+            offset: const Offset(0, -6),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Column(children: [
+                Row(children: [
+                  for (var i = 0; i < 3; i++)
+                    Expanded(
+                      child: AnimatedContainer(
+                        duration: K.fast,
+                        height: 5,
+                        margin: EdgeInsets.only(right: i < 2 ? 6 : 0),
+                        decoration: BoxDecoration(
+                            color: strength >= 0 && i <= strength.clamp(0, 2) ? sc[strength] : K.surfaceMid, borderRadius: BorderRadius.circular(99)),
+                      ),
+                    ),
+                ]),
+                const SizedBox(height: 6),
+                Row(children: [
+                  Text(strength < 0 ? 'Password strength' : sl[strength],
+                      style: t.labelSmall?.copyWith(color: strength < 0 ? K.secondary : sc[strength])),
+                  const Spacer(),
+                  Text(strength < 0 ? 'None' : 'Min. 8 chars', style: t.labelSmall?.copyWith(color: K.secondary)),
+                ]),
+              ]),
+            ),
+          ),
+          _Field(
+            label: 'Confirm password',
+            controller: _pw2,
+            icon: Icons.lock_reset_rounded,
+            hint: 'Re-enter your password',
+            obscure: _hide,
+            error: _err['pw2'],
+            trailing: match ? _ok : null,
+            onChanged: (_) {
+              _clear('pw2');
+              setState(() {});
+            },
+          ),
+        ]),
       ),
-      if (_pw.text.isNotEmpty)
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Row(children: [
-            for (var i = 0; i < 3; i++)
-              Expanded(
-                child: AnimatedContainer(
-                  duration: K.fast,
-                  height: 4,
-                  margin: const EdgeInsets.only(right: 4),
-                  decoration: BoxDecoration(color: i < (strength + 1).clamp(1, 3) ? sc[strength] : K.outlineVariant, borderRadius: BorderRadius.circular(2)),
-                ),
-              ),
-            const SizedBox(width: 8),
-            Text(sl[strength], style: t.labelSmall?.copyWith(color: sc[strength])),
-          ]),
-        ),
-      const SizedBox(height: 12),
-      TextField(controller: _pw2, obscureText: _hide, decoration: dec('Confirm password', Icons.lock_outline_rounded, 'pw2')),
-      const SizedBox(height: 16),
+      const SizedBox(height: 14),
       InkWell(
+        borderRadius: K.r12,
         onTap: () => setState(() => _agreed = !_agreed),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Checkbox(value: _agreed, onChanged: (v) => setState(() => _agreed = v ?? false)),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text.rich(TextSpan(style: t.bodySmall?.copyWith(color: K.onSurface), children: [
+              padding: const EdgeInsets.only(top: 12, right: 4),
+              child: Text.rich(TextSpan(style: t.bodySmall?.copyWith(color: K.secondary, height: 1.45), children: [
                 const TextSpan(text: "I agree to Kantoi's "),
                 TextSpan(
                   text: 'Privacy Notice and Terms',
-                  style: const TextStyle(color: K.primary, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
+                  style: const TextStyle(color: K.primaryContainer, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
                   recognizer: TapGestureRecognizer()
                     ..onTap = () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrivacyNoticePage())),
                 ),
@@ -360,21 +638,121 @@ class _RegisterState extends State<_Register> {
           ),
         ]),
       ),
-      if (_err['agreed'] != null) Text(_err['agreed']!, style: t.bodySmall?.copyWith(color: K.red)),
-      if (_err['form'] != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_err['form']!, style: t.bodySmall?.copyWith(color: K.red))),
+      if (_err['agreed'] != null) Text(_err['agreed']!, style: t.bodySmall?.copyWith(color: K.error)),
+      if (_err['form'] != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_err['form']!, style: t.bodySmall?.copyWith(color: K.error))),
       const SizedBox(height: 16),
       FilledButton(
-        style: FilledButton.styleFrom(minimumSize: const Size(0, 52)),
         onPressed: _busy || !_agreed ? null : _send,
-        child: _busy
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-            : Text(auth.emailCodes ? 'Send verification code' : 'Create account'),
+        child: _busyOr(_busy, auth.emailCodes ? 'Send verification code' : 'Create account'),
       ),
+      const SizedBox(height: 8),
       Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text('Already have an account?', style: t.bodyMedium),
+        Text('Already have an account?', style: t.bodyMedium?.copyWith(color: K.secondary)),
         TextButton(onPressed: widget.onBack, child: const Text('Log in')),
       ]),
     ]);
+  }
+}
+
+// ------------------------------------------------------------- the code
+
+/// Six boxes filled from an on-screen keypad; long-press pastes a code.
+class _CodeBoxes extends StatelessWidget {
+  final String digits;
+  final bool error;
+  final VoidCallback onPaste;
+  const _CodeBoxes({required this.digits, required this.error, required this.onPaste});
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return GestureDetector(
+      onLongPress: onPaste,
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        for (var i = 0; i < 6; i++)
+          AnimatedContainer(
+            duration: K.fast,
+            width: 48,
+            height: 56,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: K.r12,
+              boxShadow: K.shadow,
+              border: error ? Border.all(color: K.error) : (i == digits.length ? Border.all(color: K.primaryContainer, width: 1.5) : null),
+            ),
+            child: i < digits.length
+                ? Text(digits[i], style: t.headlineSmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]))
+                : i == digits.length
+                    ? const _Caret()
+                    : Container(width: 8, height: 8, decoration: const BoxDecoration(color: K.surfaceHighest, shape: BoxShape.circle)),
+          ),
+      ]),
+    );
+  }
+}
+
+class _Caret extends StatefulWidget {
+  const _Caret();
+  @override
+  State<_Caret> createState() => _CaretState();
+}
+
+class _CaretState extends State<_Caret> with SingleTickerProviderStateMixin {
+  late final _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      FadeTransition(opacity: _c, child: Container(width: 2, height: 24, color: K.primaryContainer));
+}
+
+class _Keypad extends StatelessWidget {
+  final ValueChanged<String> onKey;
+  final VoidCallback onDelete;
+  const _Keypad({required this.onKey, required this.onDelete});
+  @override
+  Widget build(BuildContext context) {
+    Widget key(Widget child, VoidCallback? onTap) => Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: Material(
+              color: onTap == null ? Colors.transparent : Colors.white,
+              borderRadius: K.r12,
+              child: InkWell(
+                borderRadius: K.r12,
+                onTap: onTap == null
+                    ? null
+                    : () {
+                        HapticFeedback.selectionClick();
+                        onTap();
+                      },
+                child: SizedBox(height: 50, child: Center(child: child)),
+              ),
+            ),
+          ),
+        );
+    const style = TextStyle(fontSize: 22, fontWeight: FontWeight.w500, color: K.onSurface);
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: const BoxDecoration(color: K.surfaceLow, borderRadius: K.r16),
+      child: Column(children: [
+        for (final row in const [
+          ['1', '2', '3'],
+          ['4', '5', '6'],
+          ['7', '8', '9'],
+        ])
+          Row(children: [for (final d in row) key(Text(d, style: style), () => onKey(d))]),
+        Row(children: [
+          key(const SizedBox.shrink(), null),
+          key(const Text('0', style: style), () => onKey('0')),
+          key(const Icon(Icons.backspace_outlined, color: K.secondary), onDelete),
+        ]),
+      ]),
+    );
   }
 }
 
@@ -388,8 +766,7 @@ class _Code extends StatefulWidget {
 }
 
 class _CodeState extends State<_Code> {
-  final _code = TextEditingController();
-  final _focus = FocusNode();
+  String _digits = '';
   int _wait = 60;
   Timer? _timer;
   bool _busy = false;
@@ -399,7 +776,6 @@ class _CodeState extends State<_Code> {
   void initState() {
     super.initState();
     _tick();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
   }
 
   void _tick() {
@@ -415,18 +791,32 @@ class _CodeState extends State<_Code> {
   @override
   void dispose() {
     _timer?.cancel();
-    _code.dispose();
-    _focus.dispose();
     super.dispose();
   }
 
+  void _key(String d) {
+    if (_busy || _digits.length >= 6) return;
+    setState(() {
+      _digits += d;
+      _err = null;
+    });
+    if (_digits.length == 6) _verify();
+  }
+
+  Future<void> _paste() async {
+    final c = (await Clipboard.getData(Clipboard.kTextPlain))?.text?.replaceAll(RegExp(r'\D'), '') ?? '';
+    if (c.length < 6) return;
+    setState(() => _digits = c.substring(0, 6));
+    _verify();
+  }
+
   Future<void> _verify() async {
-    if (_code.text.length != 6) return;
+    if (_digits.length != 6) return;
     setState(() {
       _busy = true;
       _err = null;
     });
-    final e = await auth.finishRegistration(widget.reg, _code.text);
+    final e = await auth.finishRegistration(widget.reg, _digits);
     if (!mounted) return;
     setState(() {
       _busy = false;
@@ -436,7 +826,8 @@ class _CodeState extends State<_Code> {
       showKToast(context, title: 'Account created', body: 'Welcome to Kantoi, ${widget.reg.fullName.split(' ').first}.', icon: Icons.verified_rounded, color: K.green);
       widget.onDone();
     } else {
-      _code.clear();
+      HapticFeedback.heavyImpact();
+      setState(() => _digits = '');
     }
   }
 
@@ -451,89 +842,143 @@ class _CodeState extends State<_Code> {
     }
   }
 
-  String get _masked {
-    final e = widget.reg.email.trim();
-    final at = e.indexOf('@');
-    if (at < 2) return e;
-    return '${e.substring(0, 1)}***${e.substring(at - 1)}';
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 24), children: [
+      _TopBar('Verify email', onBack: widget.onBack),
+      _Hero(
+        icon: Icons.mail_outline_rounded,
+        round: true,
+        title: 'Enter the 6-digit code',
+        subtitle: 'We sent a code to ${maskEmail(widget.reg.email)}. It expires in 10 minutes.',
+      ),
+      _CodeBoxes(digits: _digits, error: _err != null, onPaste: _paste),
+      if (_err != null) Padding(padding: const EdgeInsets.only(top: 10), child: Text(_err!, textAlign: TextAlign.center, style: t.bodySmall?.copyWith(color: K.error))),
+      const SizedBox(height: 14),
+      Center(
+        child: _wait > 0
+            ? Text.rich(TextSpan(style: t.bodyMedium?.copyWith(color: K.secondary), children: [
+                const TextSpan(text: "Didn't get it?  Resend in "),
+                TextSpan(text: '0:${_wait.toString().padLeft(2, '0')}', style: const TextStyle(color: K.onSurface, fontWeight: FontWeight.w600)),
+              ]))
+            : TextButton(onPressed: _resend, child: const Text('Resend code')),
+      ),
+      const SizedBox(height: 16),
+      KCard(
+        color: K.surfaceLow,
+        child: Row(children: [
+          TintIcon(Icons.shield_outlined, color: K.onTertiaryContainer, size: 32),
+          const SizedBox(width: 12),
+          Expanded(child: Text('Check your spam folder. Kantoi will never ask you for this code by phone or chat.', style: t.bodyMedium?.copyWith(color: K.secondary))),
+        ]),
+      ),
+      const SizedBox(height: 16),
+      FilledButton(onPressed: _busy || _digits.length != 6 ? null : _verify, child: _busyOr(_busy, 'Verify', arrow: false)),
+      const SizedBox(height: 16),
+      _Keypad(
+        onKey: _key,
+        onDelete: () {
+          if (_digits.isNotEmpty) setState(() => _digits = _digits.substring(0, _digits.length - 1));
+        },
+      ),
+    ]);
+  }
+}
+
+/// j***n@gmail.com
+String maskEmail(String email) {
+  final e = email.trim();
+  final at = e.indexOf('@');
+  if (at < 2) return e;
+  return '${e.substring(0, 1)}***${e.substring(at - 1)}';
+}
+
+// ----------------------------------------------------------------- forgot
+
+class _Forgot extends StatefulWidget {
+  final VoidCallback onBack;
+  final VoidCallback onDone;
+  const _Forgot({super.key, required this.onBack, required this.onDone});
+  @override
+  State<_Forgot> createState() => _ForgotState();
+}
+
+class _ForgotState extends State<_Forgot> {
+  final _email = TextEditingController();
+  final _code = TextEditingController();
+  final _pw = TextEditingController();
+  bool _sent = false;
+  bool _busy = false;
+  bool _hide = true;
+  String? _err;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _code.dispose();
+    _pw.dispose();
+    super.dispose();
+  }
+
+  Future<void> _run(Future<String?> Function() f, VoidCallback onOk) async {
+    setState(() {
+      _busy = true;
+      _err = null;
+    });
+    final e = await f();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _err = e;
+    });
+    if (e == null) onOk();
   }
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final digits = _code.text;
-    return ListView(padding: const EdgeInsets.fromLTRB(24, 8, 24, 24), children: [
-      Align(alignment: Alignment.centerLeft, child: IconButton(onPressed: widget.onBack, icon: const Icon(Icons.arrow_back_rounded))),
-      const SizedBox(height: 8),
-      Container(
-        width: 64,
-        height: 64,
-        alignment: Alignment.center,
-        decoration: const BoxDecoration(color: K.primaryContainer, shape: BoxShape.circle),
-        child: const Icon(Icons.mark_email_unread_outlined, color: Colors.white, size: 32),
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 24), children: [
+      _TopBar('Reset password', onBack: widget.onBack),
+      _Hero(
+        icon: Icons.key_rounded,
+        title: _sent ? 'Choose a new password' : 'Forgot your password?',
+        subtitle: _sent ? 'Enter the code we sent to ${maskEmail(_email.text)}.' : "We'll email you a 6-digit code to set a new one.",
       ),
-      const SizedBox(height: 16),
-      Text('Enter the 6-digit code', style: t.headlineMedium),
-      const SizedBox(height: 4),
-      Text('We sent a code to $_masked. It expires in 10 minutes.', style: t.bodyMedium?.copyWith(color: K.onSurfaceVariant)),
-      const SizedBox(height: 24),
-      // Six boxes over one hidden field, so paste and autofill work.
-      Stack(children: [
-        Opacity(
-          opacity: 0,
-          child: TextField(
-            controller: _code,
-            focusNode: _focus,
-            keyboardType: TextInputType.number,
-            autofillHints: const [AutofillHints.oneTimeCode],
-            maxLength: 6,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            onChanged: (v) {
-              setState(() {});
-              if (v.length == 6) _verify();
-            },
+      KCard(
+        padding: const EdgeInsets.all(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _Field(label: 'Email address', controller: _email, icon: Icons.mail_outline_rounded, hint: 'name@example.com', keyboard: TextInputType.emailAddress),
+          if (_sent) ...[
+            _Field(label: '6-digit code', controller: _code, icon: Icons.pin_outlined, hint: '123456', keyboard: TextInputType.number),
+            _Field(
+              label: 'New password',
+              controller: _pw,
+              icon: Icons.lock_outline_rounded,
+              hint: 'At least 8 characters',
+              obscure: _hide,
+              trailing: IconButton(
+                  icon: Icon(_hide ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: K.secondary),
+                  onPressed: () => setState(() => _hide = !_hide)),
+            ),
+          ],
+          if (_err != null) Padding(padding: const EdgeInsets.only(bottom: 10), child: Text(_err!, style: t.bodySmall?.copyWith(color: K.error))),
+          FilledButton(
+            onPressed: _busy
+                ? null
+                : () => _sent
+                    ? _run(() => auth.finishReset(_email.text, _code.text, _pw.text), () {
+                        showKToast(context, title: 'Password changed', icon: Icons.verified_rounded, color: K.green);
+                        widget.onDone();
+                      })
+                    : _run(() => auth.startReset(_email.text), () => setState(() => _sent = true)),
+            child: _busyOr(_busy, _sent ? 'Reset and log in' : 'Send code'),
           ),
-        ),
-        GestureDetector(
-          onTap: () => _focus.requestFocus(),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            for (var i = 0; i < 6; i++)
-              AnimatedContainer(
-                duration: K.fast,
-                width: 46,
-                height: 56,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: K.r8,
-                  border: Border.all(
-                      color: _err != null ? K.red : (i == digits.length ? K.primaryContainer : K.outlineVariant), width: i == digits.length ? 1.5 : 1),
-                ),
-                child: Text(i < digits.length ? digits[i] : '',
-                    style: t.headlineSmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
-              ),
-          ]),
-        ),
-      ]),
-      if (_err != null) Padding(padding: const EdgeInsets.only(top: 10), child: Text(_err!, style: t.bodySmall?.copyWith(color: K.red))),
-      const SizedBox(height: 16),
-      Center(
-        child: _wait > 0
-            ? Text("Didn't get it? Resend in 0:${_wait.toString().padLeft(2, '0')}", style: t.bodySmall)
-            : TextButton(onPressed: _resend, child: const Text('Resend code')),
+        ]),
       ),
-      const SizedBox(height: 8),
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Icon(Icons.shield_outlined, size: 16, color: K.amber),
-        const SizedBox(width: 6),
-        Expanded(child: Text('Check your spam folder. Kantoi will never ask you for this code by phone or chat.', style: t.bodySmall)),
-      ]),
-      const SizedBox(height: 24),
-      FilledButton(
-        style: FilledButton.styleFrom(minimumSize: const Size(0, 52)),
-        onPressed: _busy || digits.length != 6 ? null : _verify,
-        child: _busy ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Verify'),
-      ),
+      const SizedBox(height: 12),
+      Text('Signed up with Google? You have no Kantoi password. Use "Continue with Google" instead.',
+          textAlign: TextAlign.center, style: t.bodySmall?.copyWith(color: K.secondary)),
     ]);
   }
 }
