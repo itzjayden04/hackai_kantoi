@@ -112,16 +112,24 @@ class _IntelPageState extends State<IntelPage> {
     super.dispose();
   }
 
-  /// Back button: stop the trace and return to the empty Trace screen.
+  /// Back button: a running trace stops but keeps its map. A finished trace
+  /// stays on screen until the user starts a new one, so back leaves the tab.
   bool _back() {
-    if (_s == null) return false;
+    if (!_running) return false;
+    _tracer?.cancel();
+    _tracer?.resume();
+    return true;
+  }
+
+  /// Clears the map and shows the empty Trace screen for a new search.
+  void _newTrace() {
     _stop();
     setState(() {
       _s = null;
       _tracer = null;
       _selected = null;
+      _q.clear();
     });
-    return true;
   }
 
   void _stop() {
@@ -397,7 +405,16 @@ class _IntelPageState extends State<IntelPage> {
     final paused = _tracer?.paused ?? false;
     final semak = s.nodes.values.where((n) => n.kind == TraceKind.phone || n.kind == TraceKind.account).toList();
     return [
-      const SizedBox(height: 16),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(child: Text('Trace', style: t.headlineSmall?.copyWith(fontWeight: FontWeight.w700))),
+        TextButton.icon(
+          onPressed: _newTrace,
+          icon: const Icon(Icons.add_rounded, size: 20),
+          label: const Text('New trace'),
+        ),
+      ]),
+      const SizedBox(height: 8),
       TraceHud(state: s, elapsed: _elapsed, paused: paused),
       if (s.mainSite case final site?) ...[
         const SizedBox(height: 12),

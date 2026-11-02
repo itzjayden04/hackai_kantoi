@@ -568,7 +568,7 @@ class KantoiLogo extends StatelessWidget {
           gradient: const LinearGradient(colors: [K.primaryContainer, K.primary], begin: Alignment.topLeft, end: Alignment.bottomRight),
           borderRadius: BorderRadius.circular(size * 0.3),
         ),
-        child: Icon(Icons.shield_rounded, color: Colors.white, size: size * 0.6),
+        child: Icon(Icons.verified_user, color: Colors.white, size: size * 0.62),
       ),
       SizedBox(width: size * 0.3),
       Text(

@@ -206,19 +206,20 @@ class _SettingsPageState extends State<SettingsPage> {
         const SettingsRow(Icons.info_outline_rounded, 'Version $appVersion', subtitle: 'Kantoi anti-scam assistant'),
       ]),
       KCard(
-        color: K.surfaceMid,
+        color: K.errorContainer,
+        borderColor: K.error.withValues(alpha: 0.4),
         onTap: () => dial(nsrcNumber),
         child: Row(children: [
-          const TintIcon(Icons.phone_in_talk_rounded, color: Colors.white, background: K.primary, size: 44),
+          const TintIcon(Icons.phone_in_talk_rounded, color: Colors.white, background: K.error, size: 44),
           const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('National Scam Response Centre', style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+              Text('National Scam Response Centre', style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: K.onErrorContainer)),
               Text('NSRC Malaysia · 24 hours', style: t.bodySmall?.copyWith(color: K.secondary)),
             ]),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: K.primary, minimumSize: const Size(0, 40)),
+            style: FilledButton.styleFrom(backgroundColor: K.error, foregroundColor: Colors.white, minimumSize: const Size(0, 40)),
             onPressed: () => dial(nsrcNumber),
             child: const Text('Call 997'),
           ),

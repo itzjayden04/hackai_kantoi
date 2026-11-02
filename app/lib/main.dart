@@ -36,7 +36,7 @@ Future<void> main() async {
   await Future.wait([historyLog.load(), reportStore.load(), cloudOutbox.load(), vault.load()]);
   await startTelegramBot();
   final firstRun = guardSupported && !await setupSeen();
-  runApp(KantoiApp(firstRun: firstRun, needsLogin: !auth.signedIn));
+  runApp(KantoiApp(firstRun: firstRun, needsLogin: !auth.signedIn, loginRequired: true));
 }
 
 /// Entry point for Android phone protection, started by the native side
@@ -50,7 +50,10 @@ class KantoiApp extends StatefulWidget {
   final bool firstRun;
   /// Every user signs in before using the app (tests skip it).
   final bool needsLogin;
-  const KantoiApp({super.key, this.firstRun = false, this.needsLogin = false});
+  /// Signing out returns to the login screen, even when the app was opened
+  /// already signed in.
+  final bool loginRequired;
+  const KantoiApp({super.key, this.firstRun = false, this.needsLogin = false, this.loginRequired = false});
   @override
   State<KantoiApp> createState() => _KantoiAppState();
 }
@@ -76,12 +79,12 @@ class _KantoiAppState extends State<KantoiApp> with WidgetsBindingObserver {
   /// Signing out (or the 7-day rule) returns to the login screen.
   void _onAuth() {
     if (!mounted) return;
-    if (!auth.signedIn && widget.needsLogin && !_login) setState(() => _login = true);
+    if (!auth.signedIn && (widget.needsLogin || widget.loginRequired) && !_login) setState(() => _login = true);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState s) {
-    if (s == AppLifecycleState.resumed && widget.needsLogin) auth.checkInactivity();
+    if (s == AppLifecycleState.resumed && (widget.needsLogin || widget.loginRequired)) auth.checkInactivity();
   }
 
   @override
@@ -115,7 +118,7 @@ class _ShellState extends State<Shell> {
     (Icons.travel_explore_outlined, Icons.travel_explore_rounded, 'Trace'),
     (Icons.flag_outlined, Icons.flag_rounded, 'Report'),
     (Icons.school_outlined, Icons.school_rounded, 'Learn'),
-    (Icons.sos_outlined, Icons.sos_rounded, 'Emergency'),
+    (Icons.sos_outlined, Icons.sos_rounded, 'Emerg'),
   ];
   // Tabs are built the first time they are opened, then kept alive so a
   // running trace or check survives switching tabs.
@@ -290,7 +293,9 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = selected ? K.primary : K.secondary;
+    // The emergency tab is always red so it can be found in a hurry.
+    final sos = item.$1 == Icons.sos_outlined;
+    final c = sos ? K.error : selected ? K.primary : K.secondary;
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -303,7 +308,7 @@ class _NavItem extends StatelessWidget {
             curve: K.curve,
             width: 64,
             height: 32,
-            decoration: BoxDecoration(color: selected ? K.primaryFixed : Colors.transparent, borderRadius: BorderRadius.circular(99)),
+            decoration: BoxDecoration(color: selected ? (sos ? K.errorContainer : K.primaryFixed) : Colors.transparent, borderRadius: BorderRadius.circular(99)),
             child: Stack(alignment: Alignment.center, children: [
               Icon(selected ? item.$2 : item.$1, color: c, size: 22),
               if (badge)

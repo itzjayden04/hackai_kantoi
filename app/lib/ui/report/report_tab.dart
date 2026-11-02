@@ -107,6 +107,36 @@ class _ReportTabState extends State<ReportTab> {
     if (mounted) setState(() => _view = _View.home);
   }
 
+  /// Throws the draft away after asking once.
+  Future<void> _discard() async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Discard this draft?'),
+        content: const Text('Everything you entered for this report will be deleted from this phone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep editing')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: K.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+    final r = _r;
+    if (r != null) await reportStore.remove(r.id);
+    if (!mounted) return;
+    setState(() {
+      _r = null;
+      _inv = null;
+      _step = 0;
+      _view = _View.home;
+    });
+    showKToast(context, title: 'Draft discarded', body: 'Nothing was kept.');
+  }
+
   Future<void> _saveDraft() async {
     final r = _r;
     if (r == null || r.status == ReportStatus.sent) return;
@@ -234,18 +264,19 @@ class _ReportTabState extends State<ReportTab> {
       ],
       const SizedBox(height: 20),
       KCard(
-        color: K.surfaceMid,
+        color: K.errorContainer,
+        borderColor: K.error.withValues(alpha: 0.4),
         onTap: () => dial(nsrcNumber),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const TintIcon(Icons.phone_in_talk_rounded, color: Colors.white, background: K.primary),
+          const TintIcon(Icons.phone_in_talk_rounded, color: Colors.white, background: K.error),
           const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Just lost money?', style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+              Text('Just lost money?', style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: K.onErrorContainer)),
               const SizedBox(height: 2),
               Text.rich(TextSpan(style: t.bodyMedium?.copyWith(color: K.onSurfaceVariant), children: const [
                 TextSpan(text: 'Call the National Scam Response Centre at '),
-                TextSpan(text: '997', style: TextStyle(fontWeight: FontWeight.w800, color: K.primary)),
+                TextSpan(text: '997', style: TextStyle(fontWeight: FontWeight.w800, color: K.error)),
                 TextSpan(text: ' straight away. Open 24 hours. Tap to call.'),
               ])),
             ]),
@@ -262,7 +293,7 @@ class _ReportTabState extends State<ReportTab> {
     final r = _r ??= ScamReport(id: _newId());
     final groups = _group == null ? ScamGroup.values : [_group!];
     return Column(children: [
-      _Header(title: 'Report type', onBack: _back, onClose: _close),
+      _Header(title: 'Report type', onBack: _back, onClose: _close, onDiscard: _discard),
       Expanded(
         child: PageBody(children: [
           if (_group != null)
@@ -330,7 +361,7 @@ class _ReportTabState extends State<ReportTab> {
     final r = _r!;
     final last = _step == _steps.length - 1;
     return Column(children: [
-      _Header(title: r.scamKind?.label ?? 'Report form', onBack: _back, onClose: _close),
+      _Header(title: r.scamKind?.label ?? 'Report form', onBack: _back, onClose: _close, onDiscard: _discard),
       Expanded(
         child: PageBody(children: [
           _Stepper(step: _step, names: _steps, short: _short, onJump: (i) => setState(() => _step = i)),
@@ -414,7 +445,7 @@ class _ReportTabState extends State<ReportTab> {
         });
     const mono = TextStyle(fontFamily: 'monospace', fontSize: 13);
     return Column(children: [
-      _Header(title: sent ? 'Your report' : 'Review', onBack: _back, onClose: _close),
+      _Header(title: sent ? 'Your report' : 'Review', onBack: _back, onClose: _close, onDiscard: sent ? null : _discard),
       Expanded(
         child: PageBody(children: [
           if (!sent) ...[
@@ -757,7 +788,8 @@ class _Header extends StatelessWidget {
   final String title;
   final VoidCallback onBack;
   final VoidCallback? onClose;
-  const _Header({required this.title, required this.onBack, this.onClose});
+  final VoidCallback? onDiscard;
+  const _Header({required this.title, required this.onBack, this.onClose, this.onDiscard});
   @override
   Widget build(BuildContext context) => Padding(
         // The app bar above already has the back arrow (it calls the same
@@ -765,6 +797,13 @@ class _Header extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 4, 4, 4),
         child: Row(children: [
           Expanded(child: Text(title, style: Theme.of(context).textTheme.titleLarge, maxLines: 1, overflow: TextOverflow.ellipsis)),
+          if (onDiscard != null)
+            TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: K.error),
+              onPressed: onDiscard,
+              icon: const Icon(Icons.delete_outline_rounded, size: 18),
+              label: const Text('Discard'),
+            ),
           if (onClose != null) IconButton(onPressed: onClose, icon: const Icon(Icons.close_rounded), tooltip: 'Close and keep a draft'),
         ]),
       );
@@ -1008,7 +1047,9 @@ class _BottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
+        // Clear the floating tab bar (the shell extends the body under it,
+        // so its height is in the bottom padding) plus a little air.
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.paddingOf(context).bottom),
         decoration: const BoxDecoration(
           color: K.surface,
           boxShadow: [BoxShadow(color: Color(0x0F0B1C30), blurRadius: 12, offset: Offset(0, -2))],

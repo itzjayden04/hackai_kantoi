@@ -44,6 +44,11 @@ void main() {
     expect(find.text('Investigation audit feed'), findsOneWidget);
     expect(find.textContaining('related entit'), findsOneWidget);
 
+    // Back keeps a finished map; only "New trace" clears it.
+    expect(appState.backHandlers[1]!(), isFalse);
+    await tester.pump();
+    expect(find.text('Investigation canvas'), findsOneWidget);
+
     await tester.ensureVisible(find.text('View full findings'));
     await tester.pump();
     await tester.tap(find.text('View full findings'));

@@ -360,8 +360,8 @@ class ResultActionBar extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: FilledButton.tonalIcon(
-              style: FilledButton.styleFrom(padding: pad, textStyle: text),
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(padding: pad, textStyle: text, foregroundColor: Colors.white, backgroundColor: K.orange),
               icon: const Icon(Icons.share_outlined, size: 20),
               label: label('Warn family'),
               onPressed: () => showWarnFamily(context, inv, shareWarning(inv)),

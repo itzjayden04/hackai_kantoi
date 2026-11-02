@@ -245,6 +245,16 @@ class SiteReport {
             10));
       }
     }
+    // Kantoi couldn't tell what the site is for: treat it as risky until shown
+    // otherwise, unless it is an official or very well-known site.
+    if (p.purpose == SitePurpose.unknown && officialBrand == null && !wellKnown) {
+      out.add(SiteReason(
+          'Purpose unknown',
+          'Kantoi could not tell what $domain is for, so it is treated as risky. '
+              'Do not pay, log in or share personal details there until you are sure who runs it.',
+          25,
+          floor: RiskLevel.suspicious));
+    }
     if (official && officialBrand != null && !p.risky) {
       out.add(SiteReason('Official website', '$domain is an official website of $officialBrand.', -20, category: CueCategory.legitimacy));
     }
