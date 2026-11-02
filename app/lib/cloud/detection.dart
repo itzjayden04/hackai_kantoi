@@ -10,7 +10,7 @@ const shareMinConfidence = 70;
 /// result is not confident enough to teach anyone anything. Holds no message
 /// text, no names and no screenshots: the scam kind, the cue categories that
 /// fired, the app, the hour, website names and one-way codes of numbers.
-Map<String, dynamic>? detectionPayload(Investigation inv, {String? app, String appVersion = '1.2.0'}) {
+Map<String, dynamic>? detectionPayload(Investigation inv, {String? app, String appVersion = '1.2.1'}) {
   final v = inv.verdict;
   if (v.level != RiskLevel.danger || v.confidence < shareMinConfidence) return null;
   final ids = <AttackerId>[];

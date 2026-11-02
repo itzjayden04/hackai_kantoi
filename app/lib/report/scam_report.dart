@@ -238,7 +238,7 @@ class ScamReport {
   /// no names, no message text, no screenshots, no transaction numbers.
   /// Identifiers become one-way codes plus a masked form; links keep only
   /// their website name.
-  Map<String, dynamic> sharedPayload({String appVersion = '1.2.0'}) => {
+  Map<String, dynamic> sharedPayload({String appVersion = '1.2.1'}) => {
         'v': 1,
         'kind': kind,
         'group': scamKind?.group.name,
