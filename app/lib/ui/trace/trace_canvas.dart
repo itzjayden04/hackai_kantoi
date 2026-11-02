@@ -76,6 +76,11 @@ class _TraceCanvasState extends State<TraceCanvas> with SingleTickerProviderStat
   final Map<String, double> _edgeBorn = {};
   final Map<String, (TextPainter, TextPainter)> _text = {};
   double _t = 0, _heat = 1, _lastChange = 0;
+  // A restarted ticker counts from zero again, so the canvas clock carries on
+  // from where it stopped. Without this, nodes "born" earlier looked unborn
+  // (invisible) after the map rested and then redrew, e.g. after closing a
+  // node's details.
+  double _tBase = 0;
   // The automatic zoom-to-fit, eased each frame.
   double _fit = 1;
   Offset _centre = Offset.zero;
@@ -85,6 +90,12 @@ class _TraceCanvasState extends State<TraceCanvas> with SingleTickerProviderStat
   void initState() {
     super.initState();
     _sync();
+    _wake();
+  }
+
+  void _wake() {
+    if (_ticker.isActive) return;
+    _tBase = _t;
     _ticker.start();
   }
 
@@ -99,7 +110,7 @@ class _TraceCanvasState extends State<TraceCanvas> with SingleTickerProviderStat
       _view.value = Matrix4.identity();
     }
     _sync();
-    if (!_ticker.isActive) _ticker.start();
+    _wake();
   }
 
   void _sync() {
@@ -130,7 +141,7 @@ class _TraceCanvasState extends State<TraceCanvas> with SingleTickerProviderStat
   }
 
   void _tick(Duration d) {
-    _t = d.inMicroseconds / 1e6;
+    _t = _tBase + d.inMicroseconds / 1e6;
     if (_heat > 0.01) {
       _simulate();
       _heat *= 0.985;

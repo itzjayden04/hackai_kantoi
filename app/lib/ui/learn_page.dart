@@ -78,7 +78,7 @@ class _LearnPageState extends State<LearnPage> {
                   Text('National Scam Response Centre. $nsrcHours.', style: t.bodySmall),
                 ]),
               ),
-              TextButton(onPressed: () => dial(nsrcNumber), child: const Text('Call')),
+              FilledButton(style: FilledButton.styleFrom(backgroundColor: K.error, minimumSize: const Size(0, 40)), onPressed: () => dial(nsrcNumber), child: const Text('Call')),
             ]),
           ),
         ],

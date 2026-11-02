@@ -452,6 +452,7 @@ Future<void> showTraceInspector(BuildContext context, TraceState s, String id) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    showDragHandle: true,
     builder: (ctx) => DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.55,
@@ -495,6 +496,13 @@ class TraceNodeDetails extends StatelessWidget {
             SelectableText(n.label, style: t.titleLarge),
           ]),
         ),
+        // In the bottom sheet: a clear way back to the map.
+        if (scroll != null)
+          IconButton.filledTonal(
+            tooltip: 'Close and return to the map',
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.close_rounded),
+          ),
       ]),
       if (n.demo) ...[
         const SizedBox(height: 8),
