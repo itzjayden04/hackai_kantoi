@@ -126,6 +126,7 @@ The app works without these. Each one switches on one extra online check. Add th
 | `GEMINI_API_KEY` | AI explanations, screenshot reading, voice transcripts |
 | `KANTOI_1` | A backup Gemini key (from a different Google Cloud project) used when the first one hits its quota |
 | `OTP_URL`, `OTP_APP_KEY` | The free email-code sender for sign-up (see [server/otp/README.md](server/otp/README.md)) |
+| `FIREBASE_API_KEY`, `FIREBASE_APP_ID`, `FIREBASE_PROJECT_ID`, `FIREBASE_SENDER_ID` | Online accounts and the shared scam database in Firebase (see [docs/firebase-setup.md](docs/firebase-setup.md)). Without them accounts stay on the phone |
 | `GOOGLE_SERVER_CLIENT_ID` | "Continue with Google" (a Web OAuth client ID from the same Google Cloud project as the Android client) |
 | `VIRUSTOTAL_API_KEY` | Link, website and file-fingerprint reputation from 70+ security companies, plus fresh scans of unknown links (free key: 4 lookups a minute, which Kantoi stays within) |
 | `SAFE_BROWSING_API_KEY` | Google's phishing list |

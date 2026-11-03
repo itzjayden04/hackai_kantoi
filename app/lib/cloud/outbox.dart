@@ -1,10 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Where queued items go once the cloud is connected. Firebase (next tag)
-/// implements this; until then items wait in the outbox on the phone.
+/// Where queued items go once the cloud is connected (FirestoreSink in a
+/// build with Firebase settings); until then items wait on the phone.
 abstract class CloudSink {
   /// Writes one document. Throws when offline or refused, so it stays queued.
   Future<void> write(String collection, String id, Map<String, dynamic> data);
@@ -65,7 +66,8 @@ class Outbox extends ChangeNotifier {
       items.removeAt(0);
     }
     await _persist();
-    await flush();
+    // Not awaited: sending can take a while (or time out) when offline.
+    unawaited(flush());
   }
 
   /// Drops a queued record, e.g. when the user marks a detection "not a scam".
@@ -74,8 +76,13 @@ class Outbox extends ChangeNotifier {
     await _persist();
   }
 
-  /// Sends what it can. Items that fail stay for next time.
-  Future<int> flush() async {
+  Future<int>? _flushing;
+
+  /// Sends what it can. Items that fail stay for next time. A flush already
+  /// running is shared, so nothing is sent twice.
+  Future<int> flush() => _flushing ??= _flush().whenComplete(() => _flushing = null);
+
+  Future<int> _flush() async {
     final s = sink;
     if (s == null || items.isEmpty) return 0;
     var n = 0;

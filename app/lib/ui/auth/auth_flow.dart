@@ -1008,8 +1008,44 @@ class _ForgotState extends State<_Forgot> {
     if (e == null) onOk();
   }
 
+  /// Cloud accounts: Firebase emails a reset link, and the password is set
+  /// on its page.
+  Widget _byLink(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 24), children: [
+      _TopBar('Reset password', onBack: widget.onBack),
+      _Hero(
+        icon: _sent ? Icons.mark_email_read_rounded : Icons.key_rounded,
+        title: _sent ? 'Check your email' : 'Forgot your password?',
+        subtitle: _sent
+            ? 'We sent a link to reset your password. After you set it, come back and log in.'
+            : "We'll email you a link to set a new one.",
+      ),
+      KCard(
+        padding: const EdgeInsets.all(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (!_sent)
+            _Field(label: 'Email address', controller: _email, icon: Icons.mail_outline_rounded, hint: 'name@example.com', keyboard: TextInputType.emailAddress),
+          if (_err != null) Padding(padding: const EdgeInsets.only(bottom: 10), child: Text(_err!, style: t.bodySmall?.copyWith(color: K.error))),
+          FilledButton(
+            onPressed: _busy
+                ? null
+                : _sent
+                    ? widget.onBack
+                    : () => _run(() => auth.sendResetLink(_email.text), () => setState(() => _sent = true)),
+            child: _busyOr(_busy, _sent ? 'Back to log in' : 'Send link'),
+          ),
+        ]),
+      ),
+      const SizedBox(height: 12),
+      Text('Signed up with Google? You have no Kantoi password. Use "Continue with Google" instead.',
+          textAlign: TextAlign.center, style: t.bodySmall?.copyWith(color: K.secondary)),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (auth.resetsByLink) return _byLink(context);
     final t = Theme.of(context).textTheme;
     return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 24), children: [
       _TopBar('Reset password', onBack: widget.onBack),

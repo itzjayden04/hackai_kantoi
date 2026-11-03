@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../auth/auth_service.dart';
 import '../engine/retention.dart';
 import '../local_store.dart';
 import 'limits_page.dart';
@@ -12,11 +13,13 @@ class PrivacyControls extends StatelessWidget {
   const PrivacyControls({super.key});
 
   Future<void> _deleteAll(BuildContext context) async {
+    final cloud = auth.signedIn && auth.backend.isCloud;
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Delete all your Kantoi data?'),
-        content: const Text('This removes your checks, live alerts, case checklists, feedback and settings from this device. '
+        content: Text('This removes your checks, live alerts, case checklists, feedback and settings from this device. '
+            '${cloud ? 'It also deletes your Kantoi account and the masked reports you shared. ' : ''}'
             'It cannot be undone.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
@@ -29,7 +32,12 @@ class PrivacyControls extends StatelessWidget {
       ),
     );
     if (ok != true) return;
-    await localStore.deleteAll();
+    try {
+      await localStore.deleteAll();
+    } on AuthProblem catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Nothing was deleted. ${e.message}')));
+      return;
+    }
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('All your Kantoi data has been deleted.')));
     }
