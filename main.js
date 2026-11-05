@@ -81,6 +81,7 @@
       });
     };
     group('.problem-cards', { rotationX: -65, y: 60, opacity: 0, transformOrigin: '50% 0%' });
+    group('.shots', { y: 90, opacity: 0, stagger: .12 });
     group('.guard-grid', { y: 50, opacity: 0 });
     group('.learn-grid', { y: 40, opacity: 0 });
     group('.arch', { y: 40, opacity: 0, stagger: .12 });
