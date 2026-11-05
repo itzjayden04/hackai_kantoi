@@ -240,7 +240,7 @@
   (function rel() {
     const sec = $('#s-rel');
     const msgs = $$('.m', sec), chips = $$('.rchip', sec), dots = $$('.tl-dot', sec);
-    const badge = $('.float-badge', sec), btxt = $('.fb-txt', sec), path = $('.tl-path', sec);
+    const badge = $('.float-badge', sec), btxt = $('.fb-txt', sec), reveal = $('.tl-reveal', sec);
     const levels = ['Low risk', 'Be careful', 'Suspicious', 'Suspicious', 'Very likely a scam'];
     const badgeLvl = [0, 1, 2, 2, 3];
     let lastLvl = -1;
@@ -251,7 +251,8 @@
         if (want !== m.classList.contains('show')) m.classList.toggle('show', want);
       });
       chips.forEach((c, i) => { c.classList.toggle('on', v >= i + .35); c.classList.toggle('hot', i === 4); });
-      path.style.strokeDashoffset = 1 - Math.min(v / 4.6, 1);
+      // Reveal the risk line from the left edge as the chat moves on.
+      reveal.setAttribute('width', 420 * Math.min(v / 4.6, 1));
       [0.3, 1.3, 3.3, 4.3].forEach((t, i) => dots[i].classList.toggle('on', v >= t));
       if (k !== lastLvl) { badge.dataset.level = badgeLvl[k]; btxt.textContent = levels[k]; lastLvl = k; }
     });
