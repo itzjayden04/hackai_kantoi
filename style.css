@@ -651,7 +651,7 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: .88em; backgro
 
 /* ---------- 13 Download ---------- */
 .dl-grid { display: grid; grid-template-columns: 1.4fr auto; gap: 56px; align-items: center; }
-.end-shield { width: 72px; height: 72px; color: #fff; margin-bottom: 20px; display: block; }
+.end-shield { width: 72px; height: 72px; color: #fff; --shield-tick: var(--navy); margin-bottom: 20px; display: block; }
 .download h2 { font-size: clamp(2.2rem, 5vw, 4.2rem); max-width: 18ch; }
 .dl-small { margin-top: 14px; opacity: .8; font-size: .9rem; }
 .team-name { margin-top: 36px; font-size: .8rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--tint); }
