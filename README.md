@@ -67,6 +67,15 @@ No Android phone? See [Run Kantoi on a Windows PC](docs/run-on-windows-emulator.
 
 If something stops working after an update or restart, open Kantoi once: the pill turns amber and shows which permission needs turning back on.
 
+## New in v1.3.0
+
+- **Online accounts (Firebase).** Accounts made with Google or email now live in Firebase, so they work on any phone. Log in with your username or email; "Forgot password" emails a reset link. Builds without the Firebase settings keep accounts on the phone as before.
+- **Shared scam database goes live.** Submitted reports and high-confidence scams are sent to Firestore as masked details only (scam type, signs, website names, one-way codes for numbers). The same scam checked twice is shared once, and "This was actually legit" takes back one that hasn't been sent yet.
+- **Delete my data deletes the online account too,** along with the reports you shared.
+- **New look.** Cleaner sections, blue headers on Trace and Emergency, a floating tab bar and tick shields.
+- **Clearer Google sign-in errors** when Google sign-in isn't set up or Google rejects the app.
+- **Build on Windows** with one command: see [Build Kantoi from source on a Windows PC](docs/build-on-windows.md).
+
 ## New in v1.2.0
 
 - **Account.** Every user signs up once, with Google or with an email code plus a username and password. Sign-up has an unticked Privacy Notice box (PDPA 2010). Email accounts are logged out after 7 days without use; Google accounts stay signed in.
