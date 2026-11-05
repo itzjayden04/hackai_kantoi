@@ -328,6 +328,11 @@ class AuthService extends ChangeNotifier {
 
   /// Google's account picker. Returns a problem, or null when signed in.
   Future<String?> signInGoogle() async {
+    // Android needs the Web client ID (GOOGLE_SERVER_CLIENT_ID) at build time;
+    // without it Google always fails with a technical error.
+    if (_googleServerClientId.isEmpty) {
+      return "Google sign-in isn't set up in this version of Kantoi. Please register with your email instead.";
+    }
     try {
       final g = GoogleSignIn.instance;
       if (!_googleReady) {
@@ -342,7 +347,9 @@ class AuthService extends ChangeNotifier {
     } on AuthProblem catch (e) {
       return e.message;
     } on GoogleSignInException catch (e) {
-      if (e.code == GoogleSignInExceptionCode.canceled) return 'Sign-in cancelled.';
+      // Android also reports setup problems (an unknown app or SHA-1) as
+      // "canceled", so only a cancel with no reason is treated as the user's.
+      if (e.code == GoogleSignInExceptionCode.canceled && (e.description ?? '').trim().isEmpty) return 'Sign-in cancelled.';
       return "Google sign-in didn't work (${e.code.name}${_detail(e.description)}). Try again or register with email.";
     } catch (e) {
       // Shows the underlying reason so a setup problem can be diagnosed.

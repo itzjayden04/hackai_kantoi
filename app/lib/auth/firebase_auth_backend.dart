@@ -69,9 +69,7 @@ class FirebaseAuthBackend implements AuthBackend {
 
   final FirebaseAuth? _auth;
   final FirebaseFirestore? _db;
-  FirebaseAuthBackend({FirebaseAuth? auth, FirebaseFirestore? db})
-      : _auth = auth,
-        _db = db;
+  FirebaseAuthBackend({this._auth, this._db});
 
   FirebaseAuth get _a => _auth ?? FirebaseAuth.instance;
   FirebaseFirestore get _d => _db ?? FirebaseFirestore.instance;
@@ -177,6 +175,12 @@ class FirebaseAuthBackend implements AuthBackend {
   Future<void> deleteAccount(KantoiUser u) => _run(() async {
         final me = _a.currentUser;
         if (me == null) throw authProblemFor('requires-recent-login');
+        // Firebase only deletes an account soon after a sign-in. Check first,
+        // so the shared records aren't deleted while the account stays.
+        final last = me.metadata.lastSignInTime;
+        if (last == null || DateTime.now().difference(last) > const Duration(minutes: 4)) {
+          throw authProblemFor('requires-recent-login');
+        }
         for (final c in const ['reports', 'detections']) {
           final mine = await _d.collection(c).where('uid', isEqualTo: me.uid).get();
           final batch = _d.batch();

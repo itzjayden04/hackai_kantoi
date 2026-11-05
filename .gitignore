@@ -23,3 +23,7 @@ secrets.json
 google-services.json
 .firebaserc
 .firebase/
+
+# Built APKs and local merge backups: never commit
+*.apk
+.merge-backup/

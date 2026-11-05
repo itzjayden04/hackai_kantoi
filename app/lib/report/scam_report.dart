@@ -6,6 +6,7 @@ import '../engine/models.dart';
 import '../engine/redaction.dart';
 import '../engine/report.dart';
 import '../engine/taxonomy.dart';
+import '../version.dart' as version;
 
 /// Where the scammer reached the user.
 enum ContactChannel { whatsapp, telegram, sms, email, phoneCall, inApp, inPerson }
@@ -238,7 +239,7 @@ class ScamReport {
   /// no names, no message text, no screenshots, no transaction numbers.
   /// Identifiers become one-way codes plus a masked form; links keep only
   /// their website name.
-  Map<String, dynamic> sharedPayload({String appVersion = '1.2.1'}) => {
+  Map<String, dynamic> sharedPayload({String appVersion = version.appVersion}) => {
         'v': 1,
         'kind': kind,
         'group': scamKind?.group.name,

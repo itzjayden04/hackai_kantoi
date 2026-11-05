@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'outbox.dart';
 
-/// Report ids ('rep-<millis>') can repeat across phones, so the owner's uid
+/// Report ids (`rep-<millis>`) can repeat across phones, so the owner's uid
 /// comes first.
 String cloudDocId(String uid, String id) => '${uid}_$id';
 
@@ -28,9 +28,7 @@ class FirestoreSink implements CloudSink {
 
   final FirebaseFirestore? _db;
   final FirebaseAuth? _auth;
-  FirestoreSink({FirebaseFirestore? db, FirebaseAuth? auth})
-      : _db = db,
-        _auth = auth;
+  FirestoreSink({this._db, this._auth});
 
   FirebaseFirestore get db => _db ?? FirebaseFirestore.instance;
   FirebaseAuth get auth => _auth ?? FirebaseAuth.instance;

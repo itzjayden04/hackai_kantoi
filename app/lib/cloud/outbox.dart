@@ -76,11 +76,24 @@ class Outbox extends ChangeNotifier {
     await _persist();
   }
 
-  Future<int>? _flushing;
+  Future<int>? _running;
 
-  /// Sends what it can. Items that fail stay for next time. A flush already
-  /// running is shared, so nothing is sent twice.
-  Future<int> flush() => _flushing ??= _flush().whenComplete(() => _flushing = null);
+  /// Sends what it can. Items that fail stay for next time. Flushes never run
+  /// at the same time, so nothing is sent twice: one asked for while another
+  /// runs waits for it, then still sends (it may have a sink or new items the
+  /// running one did not). Returns how many were sent while the caller waited.
+  Future<int> flush() {
+    final before = _running;
+    final f = () async {
+      final earlier = before == null ? 0 : await before.catchError((_) => 0);
+      return earlier + await _flush();
+    }();
+    _running = f;
+    f.whenComplete(() {
+      if (identical(_running, f)) _running = null;
+    }).ignore();
+    return f;
+  }
 
   Future<int> _flush() async {
     final s = sink;
