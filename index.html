@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kantoi · Catch the scam before you pay</title>
+<meta name="description" content="Kantoi is an Android anti-scam app: check any message, link or screenshot, trace who is behind it, and report it in one tap. HackAI 2026, Track 3.">
+<meta name="theme-color" content="#0B1220">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4 56 12v18c0 16-11 26-24 30C19 56 8 46 8 30V12z' fill='%2300236F'/%3E%3Cpath d='m21 32 8 8 15-16' fill='none' stroke='%23fff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,500,1,0&display=block">
+<link rel="stylesheet" href="style.css?v=2">
+</head>
+<body>
+
+<!-- Shared SVG symbols -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="shield" viewBox="0 0 64 64">
+      <path d="M32 4 56 12v18c0 16-11 26-24 30C19 56 8 46 8 30V12z" fill="currentColor"/>
+      <path d="m21 32 8 8 15-16" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- Presenter chrome -->
+<div class="progress" aria-hidden="true"><div class="progress-fill"></div></div>
+<nav class="dots" aria-label="Sections"></nav>
+<a class="skip" href="#s-pipeline">Skip to the demo</a>
+
+<main id="top">
+
+<!-- 1 INTRO ============================================================ -->
+<section class="slide dark intro" id="s-intro" data-label="Kantoi">
+  <canvas class="mesh" aria-hidden="true"></canvas>
+  <div class="wrap intro-grid">
+    <div class="intro-brand">
+      <svg class="intro-shield" viewBox="0 0 64 64" aria-hidden="true">
+        <path class="sh-outline" pathLength="1" d="M32 4 56 12v18c0 16-11 26-24 30C19 56 8 46 8 30V12z"/>
+        <path class="sh-fill" d="M32 4 56 12v18c0 16-11 26-24 30C19 56 8 46 8 30V12z"/>
+        <path class="sh-check" pathLength="1" d="m21 32 8 8 15-16"/>
+      </svg>
+      <h1 class="stamp" aria-label="Kantoi.">KANTOI<span class="red">.</span></h1>
+      <p class="tagline"><span class="type" data-text="Catch the scam before you pay."></span><span class="caret" aria-hidden="true"></span></p>
+      <p class="intro-sub">An Android app that checks any message, link or screenshot, explains why it is (or isn't) a scam, traces who is behind it, and gets your report ready in one tap.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary magnetic" href="#s-pipeline" data-goto="s-pipeline"><span class="ms">play_circle</span>See how it works</a>
+        <a class="btn btn-ghost magnetic" href="#s-download" data-goto="s-download"><span class="ms">download</span>Download the app</a>
+      </div>
+    </div>
+
+    <div class="lockscreen" aria-label="Two incoming messages">
+      <div class="lock-time">9:41</div>
+      <div class="lock-date">Thursday</div>
+      <div class="notif n1">
+        <div class="notif-head"><span class="app-dot ms">chat</span>+60 1X-XXX XXXX<span class="when">now</span></div>
+        <p>Hi, is this Mr Tan? Sorry, wrong number 😅 You seem nice though, can we be friends?</p>
+      </div>
+      <div class="notif n2">
+        <div class="notif-head"><span class="app-dot ms">chat</span>+60 1X-XXX XXXX<span class="when">now</span></div>
+        <p><mark class="hl">Guaranteed</mark> <mark class="hl">30% profit</mark> every week… <mark class="hl">transfer</mark> RM5000 <mark class="hl">today only</mark>.</p>
+      </div>
+      <div class="scanline" aria-hidden="true"></div>
+      <div class="caught-chip"><span class="ms">gpp_maybe</span>Very likely a scam</div>
+    </div>
+  </div>
+  <div class="hint" aria-hidden="true"><kbd>→</kbd> Press to continue</div>
+</section>
+
+<!-- 2 PROBLEM ========================================================== -->
+<section class="slide light problem" id="s-problem" data-label="The problem">
+  <div class="wrap">
+    <p class="eyebrow">The problem</p>
+    <h2 class="split">Scams don't look like scams anymore.</h2>
+    <div class="problem-cards">
+      <article class="pcard">
+        <div class="pcard-tag"><span class="ms">local_shipping</span>Parcel fee SMS</div>
+        <div class="bubble in">
+          <div class="bubble-from">POS-PARCEL</div>
+          Your parcel is on hold at our hub. Pay the RM1.50 redelivery fee within 24 hours: <u>poslaju-fee.example/my</u>
+        </div>
+        <p class="pcard-note">A fake courier link that looks like the real one.</p>
+      </article>
+      <article class="pcard">
+        <div class="pcard-tag"><span class="ms">local_police</span>"PDRM inspector"</div>
+        <div class="bubble in">
+          <div class="bubble-from">Insp. Rahman (PDRM)</div>
+          Your IC is linked to a money-laundering case. To protect your savings, move them to this safe account now. Do not tell your family.
+        </div>
+        <p class="pcard-note">Real police never ask you to move money.</p>
+      </article>
+      <article class="pcard">
+        <div class="pcard-tag"><span class="ms">work</span>Easy job offer</div>
+        <div class="bubble in">
+          <div class="bubble-from">HR Recruiter Mia</div>
+          Part-time job! Like videos, earn RM300 daily 💰 No experience needed. Reply YES to start today.
+        </div>
+        <p class="pcard-note">Ends with a "top-up" to unlock your pay.</p>
+      </article>
+    </div>
+
+    <!-- Fill data-value and data-source with a real, cited figure. Leave empty to show the placeholder text only. -->
+    <div class="stat" data-value="" data-prefix="" data-suffix="" data-source="">
+      <div class="stat-num" aria-hidden="true">0</div>
+      <div class="stat-text">[STAT + SOURCE: e.g. official PDRM / NSRC figure]</div>
+    </div>
+
+    <p class="closing split">Victims ask two questions: <b>Is this a scam?</b> And <b>who's behind it?</b></p>
+  </div>
+</section>
+
+<!-- 3 PIPELINE (pinned) ================================================= -->
+<section class="slide light pipeline" id="s-pipeline" data-label="How it works" data-pin="pipe" data-steps="6">
+  <div class="wrap pipe-wrap">
+    <div class="pipe-head">
+      <p class="eyebrow">How it works</p>
+      <h2>One message, six stages, in a few seconds.</h2>
+    </div>
+
+    <ol class="stages" aria-label="Check stages">
+      <li class="stage" data-i="0"><span class="node"><span class="ms">description</span></span><span class="stage-name">Read</span></li>
+      <li class="stage" data-i="1"><span class="node"><span class="ms">shield_lock</span></span><span class="stage-name">Protect your details</span></li>
+      <li class="stage" data-i="2"><span class="node"><span class="ms">flag</span></span><span class="stage-name">Scam signs</span></li>
+      <li class="stage" data-i="3"><span class="node"><span class="ms">link</span></span><span class="stage-name">Links</span></li>
+      <li class="stage" data-i="4"><span class="node"><span class="ms">auto_awesome</span></span><span class="stage-name">AI</span></li>
+      <li class="stage" data-i="5"><span class="node"><span class="ms">gavel</span></span><span class="stage-name">Verdict</span></li>
+      <span class="stage-track" aria-hidden="true"><span class="stage-fill"></span></span>
+    </ol>
+
+    <div class="pipe-body">
+      <div class="pipe-left">
+      <div class="pipe-msg card">
+        <div class="pipe-msg-head"><span class="ms">sms</span>Incoming message<span class="where"><span class="ms">lock</span><span class="where-txt">On this phone</span></span></div>
+        <p class="pipe-text">
+          <span class="readmask">Hi dear, it's Amy from the wrong-number chat 😅
+          <mark class="sig">Guaranteed</mark> <mark class="sig">30% profit</mark> every week.
+          <mark class="sig">Transfer</mark> RM5000 <mark class="sig">today only</mark> to
+          <span class="acct"><span class="acct-real">Maybank 5123456789012</span><span class="acct-mask">Maybank ••••••••9012</span></span>
+          and register at <span class="plink">bit.example/amy-profit</span></span>
+        </p>
+        <div class="hops">
+          <div class="hop"><span class="ms">link</span><b>bit.example/amy-profit</b><span class="hop-meta">short link · redirects</span></div>
+          <div class="hop"><span class="ms">subdirectory_arrow_right</span><b>amy-profit.example</b><span class="hop-meta"><i class="bad">domain 3 days old</i> · new certificate · hosted abroad · login form</span></div>
+        </div>
+      </div>
+      </div>
+
+      <div class="pipe-side">
+        <div class="captions">
+          <p class="cap" data-i="0"><b>Read.</b> Kantoi reads the text, whether you pasted it, shared it from WhatsApp, or sent a screenshot, PDF or voice note.</p>
+          <p class="cap" data-i="1"><b>Protect your details.</b> Names, phone, IC and account numbers are masked on the phone, before anything goes online.</p>
+          <p class="cap" data-i="2"><b>Scam signs.</b> Pressure words light up in English, Malay, Manglish, Chinese and Tamil, and Kantoi says which step of a known scam script this is.</p>
+          <p class="cap" data-i="3"><b>Links.</b> Every redirect is followed safely. Each hop shows domain age, certificate, hosting country, look-alike brands and login forms.</p>
+          <p class="cap" data-i="4"><b>AI.</b> Google Gemini writes a plain-English explanation. It only sees the masked text. Offline? Built-in rules still give a verdict.</p>
+          <p class="cap" data-i="5"><b>Verdict.</b> One clear answer, with every reason listed, so you can decide before you pay.</p>
+        </div>
+
+        <div class="verdict card">
+          <svg class="gauge" viewBox="0 0 200 116" aria-hidden="true">
+            <path d="M20 100 A80 80 0 0 1 54.1 34.5" class="g-green"/>
+            <path d="M60 30.7 A80 80 0 0 1 140 30.7" class="g-orange"/>
+            <path d="M145.9 34.5 A80 80 0 0 1 180 100" class="g-red"/>
+            <g class="needle"><line x1="100" y1="100" x2="100" y2="34"/><circle cx="100" cy="100" r="8"/></g>
+          </svg>
+          <div class="verdict-text">
+            <div class="pill red"><span class="ms">gpp_bad</span>Very likely a scam</div>
+            <ul class="cues">
+              <li>Guaranteed returns</li><li>Urgency: "today only"</li><li>Money to a personal account</li><li>Started as a "wrong number"</li><li>Link to a 3-day-old site</li>
+            </ul>
+          </div>
+        </div>
+
+        <ul class="minilog" aria-label="Activity log">
+          <li data-i="0"><span class="ms lock">lock</span>Read message<span>on phone</span></li>
+          <li data-i="1"><span class="ms lock">lock</span>Masked 1 account number<span>on phone</span></li>
+          <li data-i="2"><span class="ms lock">lock</span>Matched 4 pressure words<span>on phone</span></li>
+          <li data-i="3"><span class="ms cloud">cloud</span>Followed 2 link hops<span>online</span></li>
+          <li data-i="4"><span class="ms cloud">cloud</span>AI explanation (masked text)<span>online</span></li>
+          <li data-i="5"><span class="ms lock">lock</span>Verdict<span>on phone</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 TRY IT ============================================================ -->
+<section class="slide tint tryit" id="s-try" data-label="Try it">
+  <div class="wrap try-grid">
+    <div class="try-copy">
+      <p class="eyebrow">Try it</p>
+      <h2 class="split">Tap a message. Watch Kantoi decide.</h2>
+      <div class="chips" role="group" aria-label="Sample messages">
+        <button class="chip" data-sample="tac"><span class="ms">verified</span>Real bank TAC</button>
+        <button class="chip" data-sample="crypto"><span class="ms">currency_bitcoin</span>Crypto "investment"</button>
+        <button class="chip" data-sample="trick"><span class="ms">smart_toy</span>AI trick</button>
+      </div>
+      <p class="try-cap" id="try-cap">Pick a sample above. Each one is a scripted replay of a real Kantoi result.</p>
+      <p class="honest"><span class="ms">info</span>Scripted replay of real Kantoi results. Nothing is sent anywhere from this page.</p>
+    </div>
+
+    <div class="phone" aria-live="polite">
+      <div class="phone-notch"></div>
+      <div class="phone-screen">
+        <div class="app-bar"><svg class="mini-shield"><use href="#shield"/></svg><b>Check</b><span class="ms">more_vert</span></div>
+        <div class="phone-scroll">
+          <div class="p-empty">
+            <span class="ms big">content_paste_search</span>
+            <p>Paste a message, link or email, or add a screenshot.</p>
+          </div>
+          <div class="p-input" hidden>
+            <div class="p-from"></div>
+            <p class="p-text"></p>
+          </div>
+          <div class="p-run" hidden>
+            <div class="p-steps">
+              <span>Read</span><span>Protect</span><span>Scam signs</span><span>Links</span><span>AI</span><span>Verdict</span>
+            </div>
+            <div class="p-bar"><i></i></div>
+          </div>
+          <div class="p-result" hidden>
+            <div class="r-head">
+              <span class="ms r-icon"></span>
+              <div><div class="r-title"></div><div class="r-sub"></div></div>
+            </div>
+            <div class="r-conf"><span>Confidence</span><div class="r-bar"><i></i></div><b class="r-conf-txt"></b></div>
+            <ul class="r-cues"></ul>
+            <details class="r-why"><summary><span class="ms">help</span>Why?</summary><p></p></details>
+            <div class="r-log-title">Activity</div>
+            <ul class="r-log"></ul>
+            <div class="r-fb">
+              <button class="fb" data-fb="legit">This was actually legit</button>
+              <button class="fb" data-fb="scam">Actually a scam</button>
+            </div>
+            <div class="r-toast" hidden>Thanks. Kantoi learns from your answer.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5 AUTO-PROTECTION ==================================================== -->
+<section class="slide light guards" id="s-guards" data-label="Always on">
+  <div class="wrap">
+    <p class="eyebrow">Always on</p>
+    <h2 class="split">Six guards. One switch each.</h2>
+    <p class="lead">The Protection centre checks things in the background, so you don't have to remember to.</p>
+    <div class="guard-grid">
+
+      <button class="guard" data-g="msg" aria-pressed="false">
+        <div class="g-top"><span class="ms g-ic">notifications_active</span><span class="switch"><i></i></span></div>
+        <h3>Messages</h3>
+        <p>New WhatsApp, Telegram, SMS and email notifications are checked as they arrive.</p>
+        <div class="demo d-msg" aria-hidden="true">
+          <div class="d-notif">Congrats! You won RM2,000. Claim now…</div>
+          <div class="d-flag red">Kantoi: Very likely a scam</div>
+        </div>
+      </button>
+
+      <button class="guard" data-g="chat" aria-pressed="false">
+        <div class="g-top"><span class="ms g-ic">forum</span><span class="switch"><i></i></span></div>
+        <h3>Chats on screen</h3>
+        <p>A small risk badge floats over the open WhatsApp, Telegram or Messenger chat.</p>
+        <div class="demo d-chat" aria-hidden="true">
+          <div class="d-b l">hi dear 😊</div><div class="d-b l">invest with me?</div>
+          <div class="d-badge"><span class="ms">shield</span></div>
+        </div>
+      </button>
+
+      <button class="guard" data-g="web" aria-pressed="false">
+        <div class="g-top"><span class="ms g-ic">language</span><span class="switch"><i></i></span></div>
+        <h3>Websites</h3>
+        <p>A scam page opened in Chrome or another browser is closed.</p>
+        <div class="demo d-web" aria-hidden="true">
+          <div class="d-url">poslaju-fee.example</div>
+          <div class="d-page"><i></i><i></i><i class="btnish"></i></div>
+          <div class="d-closed"><span class="ms">gpp_bad</span>Kantoi closed this page</div>
+        </div>
+      </button>
+
+      <button class="guard" data-g="call" aria-pressed="false">
+        <div class="g-top"><span class="ms g-ic">call</span><span class="switch"><i></i></span></div>
+        <h3>Calls</h3>
+        <p>Risky callers get a warning; blocked numbers are rejected. Kantoi never listens to calls.</p>
+        <div class="demo d-call" aria-hidden="true">
+          <div class="d-caller"><span class="ms">person</span>+60 3-XXXX XXXX</div>
+          <div class="d-warn"><span class="ms">warning</span>Answer carefully</div>
+        </div>
+      </button>
+
+      <button class="guard" data-g="apps" aria-pressed="false">
+        <div class="g-top"><span class="ms g-ic">qr_code_scanner</span><span class="switch"><i></i></span></div>
+        <h3>New apps &amp; pictures</h3>
+        <p>Newly installed apps and QR codes in new screenshots are checked.</p>
+        <div class="demo d-apps" aria-hidden="true">
+          <div class="d-qr"><span class="ms">qr_code_2</span><i class="d-scan"></i></div>
+          <div class="d-flag orange">QR link checked: be careful</div>
+        </div>
+      </button>
+
+      <button class="guard" data-g="pay" aria-pressed="false">
+        <div class="g-top"><span class="ms g-ic">account_balance_wallet</span><span class="switch"><i></i></span></div>
+        <h3>Before you pay</h3>
+        <p>Opening a banking or e-wallet app soon after a risky chat shows a pause card first.</p>
+        <div class="demo d-pay" aria-hidden="true">
+          <div class="d-bank"><b>My Bank</b><i></i><i></i></div>
+          <div class="d-pause"><span class="ms">pause_circle</span>Pause. You were just in a risky chat.</div>
+        </div>
+      </button>
+
+    </div>
+    <p class="hintline"><span class="ms">touch_app</span>Tap a card to switch it on.</p>
+  </div>
+</section>
+
+<!-- 6 RELATIONSHIP (pinned) ============================================== -->
+<section class="slide light rel" id="s-rel" data-label="Relationship check" data-pin="rel" data-steps="4">
+  <div class="wrap rel-grid">
+    <div class="rel-copy">
+      <p class="eyebrow">Relationship check</p>
+      <h2>Romance and investment scams take weeks. Kantoi reads the whole chat.</h2>
+      <p class="lead">Runs when you open a chat. Also works on a chat export, or 9 quick questions. It also spots a friend's hijacked account.</p>
+      <div class="rel-chips">
+        <span class="rchip" data-c="0"><span class="ms">waving_hand</span>How you met</span>
+        <span class="rchip" data-c="1"><span class="ms">favorite</span>Fast intimacy</span>
+        <span class="rchip" data-c="2"><span class="ms">content_copy</span>Copy-paste replies</span>
+        <span class="rchip" data-c="3"><span class="ms">call_split</span>Story contradictions</span>
+        <span class="rchip" data-c="4"><span class="ms">payments</span>Money came up fast</span>
+      </div>
+    </div>
+    <div class="rel-phone">
+      <div class="chat card">
+        <div class="chat-head"><span class="avatar">A</span><div><b>Amy</b><small>WhatsApp</small></div>
+          <div class="float-badge" data-level="0"><span class="ms">shield</span><span class="fb-txt">Looks fine</span></div>
+        </div>
+        <div class="chat-body">
+          <div class="m l" data-m="0">Hi, is this Mr Tan? Sorry, wrong number 😅</div>
+          <div class="m l" data-m="0">You seem nice though, can we be friends?</div>
+          <div class="m r" data-m="0">Haha ok sure</div>
+          <div class="m l" data-m="1">Good morning dear ☀️ I dreamed about you last night</div>
+          <div class="m l" data-m="2">Good morning dear ☀️ I dreamed about you last night</div>
+          <div class="m l" data-m="2">I'm a nurse in Singapore, very busy today</div>
+          <div class="m l" data-m="3">My work on the oil rig is so lonely 😔</div>
+          <div class="m l" data-m="4">My uncle's platform gives guaranteed 30% weekly. Transfer RM5000 today, dear?</div>
+        </div>
+      </div>
+      <svg class="timeline" viewBox="0 0 400 120" preserveAspectRatio="none" aria-label="Risk timeline">
+        <line x1="0" y1="110" x2="400" y2="110" class="tl-axis"/>
+        <path class="tl-path" pathLength="1" d="M0 104 C40 102 60 96 90 92 S150 70 180 66 S240 58 270 46 S330 20 400 8"/>
+        <circle class="tl-dot" data-d="0" cx="20" cy="103" r="5"/>
+        <circle class="tl-dot" data-d="1" cx="140" cy="76" r="5"/>
+        <circle class="tl-dot" data-d="2" cx="270" cy="46" r="5"/>
+        <circle class="tl-dot" data-d="3" cx="390" cy="10" r="6"/>
+      </svg>
+      <div class="tl-labels"><span>"Wrong number"</span><span>Fast intimacy</span><span>Story changes</span><span>Money request</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 7 TRACE (pinned, dark) =============================================== -->
+<section class="slide dark trace" id="s-trace" data-label="Trace" data-pin="trace" data-steps="7">
+  <div class="wrap trace-wrap">
+    <div class="trace-head">
+      <p class="eyebrow">Trace</p>
+      <h2>Who's behind it? The map grows as each lookup returns.</h2>
+    </div>
+    <div class="trace-grid">
+      <div class="graph-box">
+        <svg class="graph" viewBox="0 0 800 460" aria-label="Trace map">
+          <g class="edges">
+            <path data-e="1" pathLength="1" d="M90 230 L230 120"/>
+            <path data-e="2" pathLength="1" d="M230 120 L390 200"/>
+            <path data-e="3" pathLength="1" d="M390 200 L380 370"/>
+            <path data-e="4" pathLength="1" d="M390 200 L560 90"/>
+            <path data-e="5" pathLength="1" d="M390 200 L590 290"/>
+            <path data-e="6" pathLength="1" d="M590 290 L720 400"/>
+            <path data-e="6" pathLength="1" d="M560 90 L720 400" class="faint"/>
+          </g>
+          <g class="nodes">
+            <g class="gnode" data-n="0" transform="translate(90 230)" tabindex="0" role="button" aria-label="Link">
+              <circle r="30"/><text class="gi" dy="9">link</text><text class="gl" y="54">SMS link</text></g>
+            <g class="gnode" data-n="1" transform="translate(230 120)" tabindex="0" role="button" aria-label="Redirect">
+              <circle r="28"/><text class="gi" dy="9">alt_route</text><text class="gl" y="-42">Redirect</text></g>
+            <g class="gnode hot" data-n="2" transform="translate(390 200)" tabindex="0" role="button" aria-label="Domain">
+              <circle r="36"/><text class="gi" dy="9">dns</text><text class="gl" y="60">poslaju-fee.example</text><text class="gs" y="80">registered 3 days ago</text></g>
+            <g class="gnode" data-n="3" transform="translate(380 370)" tabindex="0" role="button" aria-label="Hosting">
+              <circle r="28"/><text class="gi" dy="9">public</text><text class="gl" y="52">Hosting · country</text></g>
+            <g class="gnode" data-n="4" transform="translate(560 90)" tabindex="0" role="button" aria-label="Certificate">
+              <circle r="28"/><text class="gi" dy="9">verified_user</text><text class="gl" y="-42">Certificate log</text></g>
+            <g class="gnode hot" data-n="5" transform="translate(590 290)" tabindex="0" role="button" aria-label="Look-alike brand">
+              <circle r="28"/><text class="gi" dy="9">content_copy</text><text class="gl" y="52">Look-alike: courier</text></g>
+            <g class="gnode case" data-n="6" transform="translate(720 400)" tabindex="0" role="button" aria-label="Earlier case">
+              <circle r="30"/><text class="gi" dy="9">folder_special</text><text class="gl" y="-42">Earlier case</text></g>
+          </g>
+        </svg>
+        <aside class="node-card card-dark" hidden>
+          <button class="nc-close" aria-label="Close"><span class="ms">close</span></button>
+          <div class="nc-title"></div>
+          <p class="nc-body"></p>
+        </aside>
+        <p class="graph-hint"><span class="ms">touch_app</span>Click any node.</p>
+      </div>
+      <div class="tlog card-dark" aria-label="Trace log">
+        <div class="tlog-head"><span class="ms">terminal</span>Trace log</div>
+        <ol>
+          <li data-l="0"><time>12:04:00</time>Start: link from SMS</li>
+          <li data-l="1"><time>12:04:01</time>Following redirect… 1 hop</li>
+          <li data-l="2"><time>12:04:01</time>DNS lookup… RDAP: registered 3 days ago</li>
+          <li data-l="3"><time>12:04:02</time>Hosting company and country found</li>
+          <li data-l="4"><time>12:04:02</time>Certificate logs: issued this week</li>
+          <li data-l="5"><time>12:04:03</time>Look-alike: imitates a courier brand</li>
+          <li data-l="6"><time>12:04:04</time>Matches earlier case "Parcel-fee campaign"</li>
+        </ol>
+        <div class="tlog-foot">
+          <span class="tchip"><span class="ms">picture_as_pdf</span>Police PDF</span>
+          <span class="tchip"><span class="ms">travel_explore</span>Public scam reports</span>
+          <span class="tchip"><span class="ms">account_balance</span>Semak Mule</span>
+        </div>
+      </div>
+    </div>
+    <p class="trace-cap">Every node is a real public lookup. <b>Campaigns are named; people never are.</b> <span class="muted">Example data, fictional domain.</span></p>
+  </div>
+</section>
+
+<!-- 8 REPORT + EMERGENCY ================================================== -->
+<section class="slide light act" id="s-act" data-label="Report &amp; Emergency">
+  <div class="wrap">
+    <p class="eyebrow red-t">Act on it</p>
+    <h2 class="split">Scammed right now? Two taps to help.</h2>
+    <div class="act-grid">
+      <div class="report card">
+        <div class="rep-head"><span class="ms">assignment</span><b>Report</b><small>20 scam types in 5 groups · pre-filled from your last check</small></div>
+        <ol class="rep-steps">
+          <li data-s="0"><span class="num">1</span><div><small>Who contacted you</small><b class="fill" data-v="+60 1X-XXX XXXX on WhatsApp"></b></div></li>
+          <li data-s="1"><span class="num">2</span><div><small>What happened</small><b class="fill" data-v="Investment scam: promised 30% a week"></b></div></li>
+          <li data-s="2"><span class="num">3</span><div><small>Money lost</small><b class="fill" data-v="RM5,000 · 1 transfer"></b></div></li>
+          <li data-s="3"><span class="num">4</span><div><small>Evidence</small><b class="fill" data-v="Chat export + 3 screenshots"></b></div></li>
+        </ol>
+        <div class="rep-ready"><span class="ms">task_alt</span>Report ready</div>
+        <div class="rep-packs">
+          <span class="pack"><span class="ms">picture_as_pdf</span>Police PDF</span>
+          <span class="pack"><span class="ms">account_balance</span>Bank pack</span>
+          <span class="pack"><span class="ms">cell_tower</span>MCMC pack</span>
+        </div>
+        <button class="btn btn-small replay" data-replay="report"><span class="ms">replay</span>Replay</button>
+      </div>
+
+      <div class="emergency card">
+        <div class="em-top">
+          <p class="em-label">Scammed right now?</p>
+          <button class="call997" id="call997"><span class="ms">call</span>Call 997 now</button>
+          <small>NSRC · National Scam Response Centre · Call within 24 hours of the transfer.</small>
+        </div>
+        <ul class="em-list">
+          <li><span class="tick"></span>Call 997 (NSRC)</li>
+          <li><span class="tick"></span>Call your bank and freeze your accounts</li>
+          <li><span class="tick"></span>Stop contact. Do not pay anything more</li>
+          <li><span class="tick"></span>Change your passwords</li>
+          <li><span class="tick"></span>Keep the evidence</li>
+          <li><span class="tick"></span>Make a police report within 24 hours</li>
+        </ul>
+        <div class="em-foot"><span class="ms">description</span>Prepare my report · call script · verified bank fraud lines</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 9 SAFE WORD VAULT ===================================================== -->
+<section class="slide vault" id="s-vault" data-label="Safe word vault">
+  <div class="wrap vault-grid">
+    <div class="vault-copy">
+      <p class="eyebrow brown-t">Safe word vault</p>
+      <h2 class="split">"Mum, I lost my phone." Ask for the safe word.</h2>
+      <p class="lead">A family safe word per person, encrypted on your phone and unlocked by fingerprint. When someone claims to be family, Kantoi tells you to ask for it.</p>
+      <p class="vault-note"><span class="ms">lock</span>Encrypted on your phone. Never backed up, never sent.</p>
+      <button class="btn btn-brown" id="vault-btn"><span class="ms">fingerprint</span><span class="vb-txt">Unlock the vault</span></button>
+    </div>
+    <div class="vault-stage">
+      <div class="vault-msg">
+        <div class="bubble in"><div class="bubble-from">Unknown number</div>Mum, I lost my phone, this is my new number. Please send money to this account, urgent!</div>
+        <div class="vault-prompt"><span class="ms">key</span><div><b>Ask for your family safe word.</b><small>Real family will know it. Scammers won't.</small></div></div>
+      </div>
+      <div class="vault-door" aria-hidden="true">
+        <svg viewBox="0 0 200 200">
+          <circle cx="100" cy="100" r="92" class="vd-ring"/>
+          <circle cx="100" cy="100" r="76" class="vd-face"/>
+          <g class="vd-wheel">
+            <circle cx="100" cy="100" r="26" class="vd-hub"/>
+            <line x1="100" y1="44" x2="100" y2="156"/><line x1="44" y1="100" x2="156" y2="100"/>
+            <line x1="60" y1="60" x2="140" y2="140"/><line x1="140" y1="60" x2="60" y2="140"/>
+          </g>
+          <circle cx="100" cy="100" r="10" class="vd-center"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 10 PRIVACY + HONEST LIMITS ============================================ -->
+<section class="slide light privacy" id="s-privacy" data-label="Privacy &amp; limits">
+  <div class="wrap priv-grid">
+    <div>
+      <p class="eyebrow">Privacy you can see</p>
+      <h2 class="split">You see what stayed on your phone.</h2>
+      <div class="actlog card">
+        <div class="actlog-head"><b>Activity log</b><span><span class="ms lock">lock</span>on phone <span class="ms cloud">cloud</span>online</span></div>
+        <ul>
+          <li><span class="ms lock">lock</span><span>Masked name <s>Ali bin Ahmad</s> <em>[Name]</em></span></li>
+          <li><span class="ms lock">lock</span><span>Masked phone <s>012-345 6789</s> <em>•••-••• 6789</em></span></li>
+          <li><span class="ms lock">lock</span><span>Masked IC <s>900101-14-5678</s> <em>••••••-••-5678</em></span></li>
+          <li><span class="ms lock">lock</span><span>Flagged an AI-trick attempt as a scam sign</span></li>
+          <li><span class="ms cloud">cloud</span><span>AI explanation, masked text only</span></li>
+          <li><span class="ms cloud">cloud</span><span>Web search, masked text only</span></li>
+        </ul>
+        <div class="actlog-foot">Kept for 7 or 30 days · <b>Delete everything</b> in one tap</div>
+      </div>
+    </div>
+    <div class="limits card">
+      <p class="eyebrow">Honest limits</p>
+      <h3>We measure ourselves honestly.</h3>
+      <p class="limits-sub">At the "Suspicious" threshold, on a <b>held-out set of 32 synthetic Malaysian messages</b> (18 scam, 14 genuine), never used for tuning:</p>
+      <div class="bars">
+        <div class="bar-row"><span>Precision</span><div class="bar"><i data-w="100"></i></div><b data-count="100" data-dec="0">0</b><small>0 genuine messages flagged</small></div>
+        <div class="bar-row"><span>Recall</span><div class="bar"><i data-w="66.7"></i></div><b data-count="66.7" data-dec="1">0</b><small>12 of 18 scams caught</small></div>
+      </div>
+      <p class="limits-sub">On the 90-message tuning set: 100% precision, 96% recall. Optimistic, because the rules were tuned on it.</p>
+      <div class="bars ghost">
+        <div class="bar-row"><span>Precision</span><div class="bar"><i data-w="100"></i></div><b data-count="100" data-dec="0">0</b></div>
+        <div class="bar-row"><span>Recall</span><div class="bar"><i data-w="96"></i></div><b data-count="96" data-dec="0">0</b></div>
+      </div>
+      <p class="caveat"><span class="ms">warning</span>Synthetic test set. Kantoi's verdicts are an aid, not a guarantee. Source: <code>docs/evaluation.md</code></p>
+    </div>
+  </div>
+</section>
+
+<!-- 11 UNDER THE HOOD ===================================================== -->
+<section class="slide dark hood" id="s-hood" data-label="Under the hood">
+  <div class="wrap">
+    <p class="eyebrow">Under the hood</p>
+    <h2 class="split">Built to work even when the internet doesn't.</h2>
+    <div class="arch">
+      <div class="arch-box">
+        <span class="ms">smartphone</span><b>On the phone</b>
+        <div class="tchips"><span>Flutter</span><span>Notification listener</span><span>Accessibility service</span><span>Built-in rule checks</span><span>Ollama (optional, offline)</span></div>
+      </div>
+      <div class="arch-arrow"><span class="ms">arrow_forward</span><small>masked</small></div>
+      <div class="arch-box">
+        <span class="ms">cloud</span><b>Online, masked</b>
+        <div class="tchips"><span>Google Gemini (free tier)</span><span>DNS</span><span>RDAP / WHOIS</span><span>Certificate logs</span><span>Tranco</span><span>VirusTotal</span><span>Safe Browsing</span><span>URLhaus</span></div>
+      </div>
+      <div class="arch-arrow"><span class="ms">arrow_forward</span></div>
+      <div class="arch-box">
+        <span class="ms">gavel</span><b>For you</b>
+        <div class="tchips"><span>Verdict</span><span>Trace map</span><span>Report packs</span></div>
+      </div>
+    </div>
+    <p class="hood-foot"><span class="ms">build</span>GitHub CI builds and signs every APK.</p>
+  </div>
+</section>
+
+<!-- 12 LEARN ============================================================== -->
+<section class="slide light learn" id="s-learn" data-label="Learn">
+  <div class="wrap">
+    <p class="eyebrow">Learn</p>
+    <h2 class="split">Spot the next one yourself.</h2>
+    <div class="learn-grid">
+      <div class="lcard"><span class="ms">menu_book</span><h3>How this scam works</h3><p>Short cards for each scam type, step by step.</p></div>
+      <div class="lcard"><span class="ms">fitness_center</span><h3>Practice drills</h3><p>Drills bring back the signs you missed last time.</p></div>
+      <div class="lcard"><span class="ms">health_and_safety</span><h3>Safety check-up</h3><p>A quick check of your settings and habits, plus shareable warning pictures.</p></div>
+    </div>
+    <div class="quiz card">
+      <p class="q">A "PDRM officer" asks you to move money to a safe account. What do you do?</p>
+      <div class="answers">
+        <button class="ans" data-ok="0">Move it quickly, it's the police</button>
+        <button class="ans" data-ok="1">Hang up, then call 997 or your bank yourself</button>
+        <button class="ans" data-ok="0">Send my IC to prove who I am</button>
+      </div>
+      <p class="q-fb" aria-live="polite"></p>
+    </div>
+  </div>
+</section>
+
+<!-- 13 DOWNLOAD + TEAM ===================================================== -->
+<section class="slide navy download" id="s-download" data-label="Download">
+  <div class="wrap dl-grid">
+    <div>
+      <svg class="end-shield"><use href="#shield"/></svg>
+      <h2 class="split">Kantoi. Catch the scam before you pay.</h2>
+      <div class="cta-row">
+        <a class="btn btn-white magnetic" href="https://github.com/itzjayden04/hackai_kantoi/releases/latest/download/Kantoi-android.apk"><span class="ms">android</span>Download the APK</a>
+        <a class="btn btn-ghost" href="https://github.com/itzjayden04/hackai_kantoi" target="_blank" rel="noopener"><span class="ms">code</span>View on GitHub</a>
+      </div>
+      <p class="dl-small">Android 7.0+. Installed outside the Play Store.</p>
+      <div class="team">
+        <div class="tcard"><b>[Jayden (KOW YONG CHEN)]</b><small>[role]</small></div>
+        <div class="tcard"><b>[Faris (Muhammad Faris bin Fazil)]</b><small>[role]</small></div>
+        <div class="tcard"><b>[Neoh, full name]</b><small>[role]</small></div>
+      </div>
+      <p class="event">HackAI 2026 · Track 3: Scam Defence &amp; Awareness</p>
+    </div>
+    <div class="qr-box">
+      <div id="qr" aria-label="QR code for the APK download"></div>
+      <p>Scan to download</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- 997 modal -->
+<div class="modal" id="modal997" role="dialog" aria-modal="true" aria-labelledby="m997-title" hidden>
+  <div class="modal-card">
+    <span class="ms modal-ic">call</span>
+    <h3 id="m997-title">997: National Scam Response Centre</h3>
+    <p>In the app, this button calls <b>997</b>, Malaysia's National Scam Response Centre (NSRC). NSRC works with the banks to trace and hold the money, so call as soon as you can after a transfer.</p>
+    <p class="muted">This website does not place calls.</p>
+    <button class="btn btn-primary" data-close>Got it</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="main.js?v=2"></script>
+</body>
+</html>
