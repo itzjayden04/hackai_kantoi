@@ -101,7 +101,7 @@ class _ReportPageState extends State<ReportPage> {
     final money = _situation == Situation.lostMoney;
     final recent = appState.history.where((i) => i.verdict.level.index >= RiskLevel.suspicious.index).take(5).toList();
     return Scaffold(
-      appBar: AppBar(title: const Text('Report generator')),
+      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Report generator')),
       body: PageBody(children: [
         KCard(
           color: K.surfaceHigh,
@@ -332,7 +332,7 @@ class _ReportPageState extends State<ReportPage> {
         const SizedBox(height: 12),
         CopyRow(label: 'Prepared', value: _fmt(_prepared), icon: Icons.schedule_rounded),
         CopyRow(label: 'Situation', value: situationLabels[_situation]!, icon: Icons.report_outlined),
-        if (v != null) CopyRow(label: 'Kantoi check', value: '${v.scamType}: ${riskLabel(v.level)}, risk ${v.score}/100', icon: Icons.shield_outlined),
+        if (v != null) CopyRow(label: 'Kantoi check', value: '${v.scamType}: ${riskLabel(v.level)}, risk ${v.score}/100', icon: Icons.verified_user_outlined),
         for (final f in fields)
           CopyRow(
             label: f.label,

@@ -9,8 +9,8 @@ import 'theme.dart';
 // Shared building blocks for every screen: cards, pills, progress, popups,
 // in-app notifications and the live "how Kantoi works" pipeline.
 
-/// White rounded card with a soft shadow (no border lines, per the design
-/// system); pass [borderColor] to outline a selected or tinted card.
+/// Frosted white card: large radius, a hairline white edge and a soft,
+/// wide shadow. Pass [borderColor] to outline a selected or tinted card.
 class KCard extends StatelessWidget {
   final Widget child;
   final EdgeInsets padding;
@@ -23,17 +23,411 @@ class KCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final bg = color ?? (dark ? scheme.surfaceContainerLow : Colors.white);
+    final frosted = color == null && !dark;
+    final bg = color ?? (dark ? scheme.surfaceContainerLow : K.glass);
+    final edge = borderColor ?? (frosted ? K.glassEdge : null);
     return DecoratedBox(
-      decoration: BoxDecoration(borderRadius: K.r16, boxShadow: dark || bg != Colors.white ? null : K.shadow),
+      decoration: BoxDecoration(borderRadius: K.rCard, boxShadow: frosted ? K.shadow : null),
       child: Material(
         color: bg,
-        shape: RoundedRectangleBorder(borderRadius: K.r16, side: borderColor == null ? BorderSide.none : BorderSide(color: borderColor!)),
+        shape: RoundedRectangleBorder(borderRadius: K.rCard, side: edge == null ? BorderSide.none : BorderSide(color: edge)),
         clipBehavior: Clip.antiAlias,
         child: InkWell(onTap: onTap, child: Padding(padding: padding, child: child)),
       ),
     );
   }
+}
+
+/// A titled block on a page: a small grey heading, an optional "i" for the
+/// detail and a right-hand action, then its content. The space above it is
+/// what separates one feature from the next.
+class KSection extends StatelessWidget {
+  final String title;
+  final String? info;
+
+  /// Extra content under the [info] text in its sheet, e.g. an activity log.
+  final Widget? infoBody;
+  final Widget? trailing;
+  final List<Widget> children;
+  final bool first;
+  const KSection(this.title, {super.key, this.info, this.infoBody, this.trailing, required this.children, this.first = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return Padding(
+      padding: EdgeInsets.only(top: first ? 0 : 32),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SizedBox(
+          height: 34,
+          child: Row(children: [
+            const SizedBox(width: 4),
+            Expanded(
+              child: Row(children: [
+                Flexible(child: Text(title, style: t.titleSmall?.copyWith(color: K.secondary, fontWeight: FontWeight.w500))),
+                if (info != null) ...[const SizedBox(width: 6), InfoButton(title: title, message: info!, body: infoBody)],
+              ]),
+            ),
+            ?trailing,
+          ]),
+        ),
+        const SizedBox(height: 8),
+        for (final (i, c) in children.indexed) ...[if (i > 0) const SizedBox(height: 12), c],
+      ]),
+    );
+  }
+}
+
+/// One frosted card holding a list: a header line (title, an optional badge,
+/// an optional "i" and a right-hand note) over rows split by hairlines.
+class KGroup extends StatelessWidget {
+  final String? title;
+  final String? badge;
+  final Color badgeColor;
+  final String? info;
+  final String? note;
+  final Color noteColor;
+  final List<Widget> children;
+  const KGroup(
+      {super.key,
+      this.title,
+      this.badge,
+      this.badgeColor = K.primary,
+      this.info,
+      this.note,
+      this.noteColor = K.outline,
+      required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final list = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (title != null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+          child: Row(children: [
+            Expanded(
+              child: Row(children: [
+                Flexible(child: Text(title!, style: t.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                if (badge != null) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+                    decoration: BoxDecoration(color: badgeColor, borderRadius: BorderRadius.circular(99)),
+                    child: Text(badge!, style: t.labelSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
+                  ),
+                ],
+                if (info != null) ...[const SizedBox(width: 4), InfoButton(title: title!, message: info!)],
+              ]),
+            ),
+            if (note != null) Text(note!, style: t.labelMedium?.copyWith(color: noteColor)),
+          ]),
+        ),
+      for (final (i, c) in children.indexed) ...[
+        if (i > 0) const Divider(height: 1, thickness: 1, indent: 16, endIndent: 16, color: K.surfaceHigh),
+        c,
+      ],
+    ]);
+    return KCard(padding: EdgeInsets.zero, child: list);
+  }
+}
+
+/// Brand colour, short mark ("TnG", "M"), and whether the colour is too
+/// light for text on white. Stands in for real logos, which Kantoi does not
+/// ship.
+const _brands = <String, (Color, String, bool)>{
+  'Shopee': (Color(0xFFEE4D2D), 'S', false),
+  'Lazada': (Color(0xFF0F146D), 'L', false),
+  'Boost': (Color(0xFFEA2127), 'B', false),
+  "Touch 'n Go": (Color(0xFF0055A5), 'TnG', false),
+  'Maybank': (Color(0xFFFFC72C), 'M', true),
+  'CIMB': (Color(0xFFC8102E), 'C', false),
+  'Public Bank': (Color(0xFFE31837), 'PB', false),
+  'RHB': (Color(0xFF0067B1), 'RHB', false),
+  'Bank Islam': (Color(0xFFB5121B), 'BI', false),
+  'BSN': (Color(0xFF0072BC), 'BSN', false),
+  'Pos Malaysia': (Color(0xFFED1C24), 'Pos', false),
+  'J&T Express': (Color(0xFFE3001B), 'J&T', false),
+  'DHL': (Color(0xFFD40511), 'DHL', false),
+  'LHDN': (Color(0xFF1F3C88), 'LHDN', false),
+  'PDRM': (Color(0xFF0B1F5C), 'PDRM', false),
+  'MyEG': (Color(0xFF00A651), 'EG', false),
+  'KWSP': (Color(0xFF0B4EA2), 'EPF', false),
+  'JPJ': (Color(0xFF1E3A8A), 'JPJ', false),
+};
+
+/// The look of [brand]'s mark: its colour, short mark and whether the colour
+/// is too light for text on white (Maybank's yellow). Unknown brands get navy
+/// and their first letter.
+(Color, String, bool) brandLook(String brand) {
+  final b = _brands[brand];
+  return (b?.$1 ?? K.navy, b?.$2 ?? (brand.isEmpty ? '?' : brand[0].toUpperCase()), b?.$3 ?? false);
+}
+
+/// Small spaced-out monospace capitals for labels, dates and units
+/// ("THIS WEEK", "12:11 PM"), next to big light numbers.
+TextStyle monoCaps({Color color = K.outline, double size = 11}) =>
+    TextStyle(fontFamily: 'monospace', fontSize: size, letterSpacing: 1.2, height: 1.3, color: color);
+
+/// A big, light number with its decimals or unit greyed, as in "72/100".
+class BigNumber extends StatelessWidget {
+  final String value;
+  final String? unit;
+  final double size;
+  final Color color;
+  const BigNumber(this.value, {super.key, this.unit, this.size = 34, this.color = K.onSurface});
+
+  @override
+  Widget build(BuildContext context) => Text.rich(TextSpan(children: [
+        TextSpan(text: value, style: TextStyle(fontSize: size, height: 1.1, fontWeight: FontWeight.w400, letterSpacing: -1.2, color: color)),
+        if (unit != null)
+          TextSpan(text: unit, style: TextStyle(fontSize: size * 0.62, fontWeight: FontWeight.w400, letterSpacing: -0.5, color: K.outline)),
+      ]));
+}
+
+/// One figure in a 2-column grid: label top-left in mono capitals, a small
+/// icon in a white circle top-right, the big number and a mono caption.
+class StatTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final String? unit;
+  final String? caption;
+  final IconData icon;
+  final Color valueColor;
+  const StatTile({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.unit,
+    this.caption,
+    this.valueColor = K.onSurface,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+        decoration: BoxDecoration(
+          color: K.glass,
+          borderRadius: const BorderRadius.all(Radius.circular(20)),
+          border: Border.all(color: K.glassEdge),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: Text(label.toUpperCase(), style: monoCaps())),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: const BoxDecoration(color: K.surfaceMid, shape: BoxShape.circle),
+              child: Icon(icon, size: 17, color: K.onSurface),
+            ),
+          ]),
+          const SizedBox(height: 10),
+          BigNumber(value, unit: unit, size: 32, color: valueColor),
+          if (caption != null) ...[const SizedBox(height: 4), Text(caption!.toUpperCase(), style: monoCaps(size: 10))],
+        ]),
+      );
+}
+
+/// A grid of [StatTile]s, two to a row.
+class StatGrid extends StatelessWidget {
+  final List<Widget> tiles;
+  const StatGrid(this.tiles, {super.key});
+
+  @override
+  Widget build(BuildContext context) => Column(children: [
+        for (var i = 0; i < tiles.length; i += 2) ...[
+          if (i > 0) const SizedBox(height: 10),
+          IntrinsicHeight(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Expanded(child: tiles[i]),
+              const SizedBox(width: 10),
+              Expanded(child: i + 1 < tiles.length ? tiles[i + 1] : const SizedBox()),
+            ]),
+          ),
+        ],
+      ]);
+}
+
+/// "• TODAY, 5 NOV" above a run of dated rows.
+class DateHeader extends StatelessWidget {
+  final String text;
+  const DateHeader(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+        child: Row(children: [
+          Container(width: 4, height: 4, decoration: const BoxDecoration(color: K.onSurface, shape: BoxShape.circle)),
+          const SizedBox(width: 8),
+          Text(text.toUpperCase(), style: monoCaps()),
+        ]),
+      );
+}
+
+/// "Today", "Yesterday" or "3 Nov" for a day header.
+String dayLabel(DateTime d, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  final day = DateTime(d.year, d.month, d.day);
+  final diff = DateTime(n.year, n.month, n.day).difference(day).inDays;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  final date = '${d.day} ${months[d.month - 1]}';
+  return diff == 0 ? 'Today, $date' : diff == 1 ? 'Yesterday, $date' : date;
+}
+
+/// A navy card with the soft gradient and glow of the Trace header and a
+/// large faint watermark icon in the corner.
+class NavyGlowCard extends StatelessWidget {
+  final Widget child;
+  final IconData? watermark;
+  final VoidCallback? onTap;
+  const NavyGlowCard({super.key, required this.child, this.watermark, this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Material(
+        borderRadius: K.rCard,
+        clipBehavior: Clip.antiAlias,
+        child: Ink(
+          decoration: const BoxDecoration(gradient: navyGlow),
+          child: InkWell(
+            onTap: onTap,
+            child: Stack(children: [
+              const Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(gradient: navyGlowSpot))),
+              if (watermark != null)
+                Positioned(right: -30, top: -20, child: Icon(watermark, size: 190, color: const Color(0x14FFFFFF))),
+              Padding(padding: const EdgeInsets.all(20), child: child),
+            ]),
+          ),
+        ),
+      );
+}
+
+/// Kantoi's blue wash, as on the Trace header: deep blue in one corner easing to a lighter blue.
+const navyGlow = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [K.navy, K.blue, Color(0xFF63A6EC)],
+  stops: [0, 0.5, 1],
+);
+
+/// The soft light patch that sits on [navyGlow], like light through glass.
+const navyGlowSpot = RadialGradient(
+  center: Alignment(0.7, 0.6),
+  radius: 0.9,
+  colors: [Color(0x55A9D2F6), Color(0x00A9D2F6)],
+);
+
+/// The last row of a shortened [KGroup]: "Show all N" / "Show less".
+class KGroupMore extends StatelessWidget {
+  final bool open;
+  final int total;
+  final VoidCallback onTap;
+  const KGroupMore({super.key, required this.open, required this.total, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => TextButton.icon(
+        style: TextButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+        icon: Icon(open ? Icons.expand_less_rounded : Icons.expand_more_rounded),
+        label: Text(open ? 'Show less' : 'Show all $total'),
+        onPressed: onTap,
+      );
+}
+
+/// A tappable row inside a [KGroup]: small round icon, label with an
+/// optional grey line under it, chevron.
+class KGroupRow extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String? subtitle;
+  final VoidCallback? onTap;
+
+  /// The right-hand icon: a chevron, or e.g. "open in new" for an outside link.
+  final IconData trailing;
+
+  /// Shown instead of the round [icon], e.g. a brand tile.
+  final Widget? leading;
+
+  /// A small icon before the [subtitle], e.g. a lock before "Encrypted".
+  final IconData? subtitleIcon;
+
+  /// The colour of the [trailing] icon; grey by default.
+  final Color trailingColor;
+  const KGroupRow(
+      {super.key,
+      required this.icon,
+      this.leading,
+      this.subtitleIcon,
+      this.trailingColor = K.outline,
+      this.color = K.primary,
+      required this.label,
+      this.subtitle,
+      this.onTap,
+      this.trailing = Icons.chevron_right_rounded});
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+          child: Row(children: [
+            leading ??
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
+                  child: Icon(icon, color: color, size: 17),
+                ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(label, style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: K.onSurface)),
+                if (subtitle != null)
+                  Row(children: [
+                    if (subtitleIcon != null) ...[Icon(subtitleIcon, size: 13, color: K.outline), const SizedBox(width: 4)],
+                    Flexible(child: Text(subtitle!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: K.outline))),
+                  ]),
+              ]),
+            ),
+            Icon(trailing, color: trailingColor, size: trailing == Icons.chevron_right_rounded ? 20 : 18),
+          ]),
+        ),
+      );
+}
+
+/// A plain "i" icon (no circle behind it) that opens an explanation in a
+/// sheet, so screens can stay short and the detail is one tap away. Pass
+/// [color] for a dark background.
+class InfoButton extends StatelessWidget {
+  final String title;
+  final String message;
+  final Widget? body;
+  final Color color;
+  const InfoButton({super.key, required this.title, required this.message, this.body, this.color = K.secondary});
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+        tooltip: 'About $title',
+        visualDensity: VisualDensity.compact,
+        style: IconButton.styleFrom(
+          foregroundColor: color,
+          fixedSize: const Size(32, 32),
+          minimumSize: const Size(32, 32),
+          padding: EdgeInsets.zero,
+        ),
+        icon: const Icon(Icons.info_outline_rounded, size: 20),
+        onPressed: () => showKSheet<void>(context, title: title, message: message, body: body, primary: 'Got it'),
+      );
+}
+
+/// A page's big title.
+class PageTitle extends StatelessWidget {
+  final String text;
+  const PageTitle(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) =>
+      Text(text, style: Theme.of(context).textTheme.displaySmall?.copyWith(fontSize: 32, height: 38 / 32));
 }
 
 /// A field label above its input, as in the design system forms.
@@ -64,7 +458,7 @@ class TintIcon extends StatelessWidget {
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: background ?? color.withValues(alpha: 0.1),
+          color: background ?? color.withValues(alpha: 0.08),
           shape: square ? BoxShape.rectangle : BoxShape.circle,
           borderRadius: square ? BorderRadius.circular(size * 0.25) : null,
         ),
@@ -72,7 +466,7 @@ class TintIcon extends StatelessWidget {
       );
 }
 
-/// Uppercase small section heading with an optional right-hand note.
+/// Small section heading with an optional right-hand note.
 class SectionLabel extends StatelessWidget {
   final String text;
   final String? note;
@@ -84,8 +478,8 @@ class SectionLabel extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
       child: Row(children: [
-        Expanded(child: Text(text.toUpperCase(), style: t.labelSmall?.copyWith(color: K.secondary, letterSpacing: 0.8))),
-        if (note != null) Text(note!, style: t.labelSmall?.copyWith(color: noteColor ?? K.secondary)),
+        Expanded(child: Text(text, style: t.labelLarge?.copyWith(color: K.secondary))),
+        if (note != null) Text(note!, style: t.labelMedium?.copyWith(color: noteColor ?? K.secondary)),
       ]),
     );
   }
@@ -103,13 +497,12 @@ class Pill extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: solid ? color : color.withValues(alpha: 0.12),
+          color: solid ? color : color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(99),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           if (icon != null) ...[Icon(icon, size: 14, color: solid ? Colors.white : color), const SizedBox(width: 4)],
-          Text(text.toUpperCase(),
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: solid ? Colors.white : color)),
+          Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: solid ? Colors.white : color)),
         ]),
       );
 }
@@ -262,7 +655,7 @@ void showKToast(
   BuildContext context, {
   required String title,
   String? body,
-  IconData icon = Icons.shield_rounded,
+  IconData icon = Icons.verified_user_rounded,
   Color color = K.primary,
   VoidCallback? onTap,
 }) {
@@ -336,9 +729,9 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
             elevation: 8,
             shadowColor: Colors.black26,
             color: Colors.white,
-            borderRadius: K.r16,
+            borderRadius: K.rCard,
             child: InkWell(
-              borderRadius: K.r16,
+              borderRadius: K.rCard,
               onTap: widget.onTap,
               child: Padding(
                 padding: const EdgeInsets.all(14),

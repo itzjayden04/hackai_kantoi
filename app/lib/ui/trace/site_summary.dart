@@ -29,9 +29,22 @@ Color reputationColor(int? score) => score == null
             : K.red;
 
 /// The website's purpose badge and reputation, with the sources behind it.
+/// [compact] keeps only the verdict, the warning signs and the reputation
+/// score; the rest is one tap away behind the "i".
 class SiteSummaryCard extends StatelessWidget {
   final SiteReport site;
-  const SiteSummaryCard({super.key, required this.site});
+  final bool compact;
+  const SiteSummaryCard({super.key, required this.site, this.compact = false});
+
+  /// Everything the compact card leaves out, as plain text for its "i".
+  String _detail() => [
+        site.purpose.explanation,
+        '${basisLabel(site.purpose.basis)}, ${site.purpose.confidenceLabel.toLowerCase()} confidence.',
+        site.reputationSummary,
+        for (final s in site.sources) '${s.label}: ${s.detail}',
+        if (site.fromCache) 'Saved result from the last 24 hours.',
+        if (site.level == RiskLevel.safe && site.levelLabel != 'Low risk') "No warning signs found yet. That does not prove it's safe.",
+      ].join('\n\n');
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +69,10 @@ class SiteSummaryCard extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              label('Purpose · ${site.domain}'),
+              Row(children: [
+                Expanded(child: label(compact ? site.domain : 'Purpose · ${site.domain}')),
+                if (compact) InfoButton(title: site.domain, message: _detail()),
+              ]),
               const SizedBox(height: 2),
               Text(p.headline, style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: p.risky ? c : K.onSurface)),
               const SizedBox(height: 6),
@@ -64,11 +80,10 @@ class SiteSummaryCard extends StatelessWidget {
             ]),
           ),
         ]),
-        const SizedBox(height: 10),
-        Text(p.explanation, style: t.bodyMedium),
+        if (!compact) ...[const SizedBox(height: 10), Text(p.explanation, style: t.bodyMedium)],
         if (p.reasons.isNotEmpty) ...[
           const SizedBox(height: 8),
-          for (final r in p.reasons.take(3))
+          for (final r in p.reasons.take(compact ? 2 : 3))
             Padding(
               padding: const EdgeInsets.only(bottom: 3),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -77,6 +92,7 @@ class SiteSummaryCard extends StatelessWidget {
               ]),
             ),
         ],
+        if (!compact) ...[
         const SizedBox(height: 6),
         Row(children: [
           Icon(p.basis == PurposeBasis.ai || p.basis == PurposeBasis.web ? Icons.cloud_outlined : Icons.lock_outline_rounded, size: 14, color: K.onSurfaceVariant),
@@ -88,16 +104,17 @@ class SiteSummaryCard extends StatelessWidget {
           Text('AI reading of the page: ${purposeLabel(p.aiPurpose!).toLowerCase()} (${((p.aiConfidence ?? 0) * 100).round()}% sure).',
               style: t.labelSmall?.copyWith(color: K.onSurfaceVariant)),
         ],
-        const Divider(height: 24),
+        ],
+        Divider(height: compact ? 20 : 24),
         Row(children: [
-          Expanded(child: label('Reputation across the internet')),
+          Expanded(child: label(compact ? 'Reputation' : 'Reputation across the internet')),
           Text(score == null ? 'Not checked' : '${site.reputationLabel} · $score/100', style: t.labelLarge?.copyWith(color: rc, fontWeight: FontWeight.w700)),
         ]),
         const SizedBox(height: 8),
         KProgressBar(value: score == null ? 0 : score / 100, color: rc, height: 6),
-        const SizedBox(height: 8),
-        Text(site.reputationSummary, style: t.bodyMedium),
-        if (sources.isNotEmpty) ...[
+        if (compact) const SizedBox(height: 4),
+        if (!compact) ...[const SizedBox(height: 8), Text(site.reputationSummary, style: t.bodyMedium)],
+        if (!compact && sources.isNotEmpty) ...[
           const SizedBox(height: 8),
           label('Sources'),
           for (final s in sources)
@@ -127,11 +144,11 @@ class SiteSummaryCard extends StatelessWidget {
               ),
             ),
         ],
-        if (site.fromCache) ...[
+        if (!compact && site.fromCache) ...[
           const SizedBox(height: 4),
           Text('Saved result from the last 24 hours.', style: t.labelSmall?.copyWith(color: K.onSurfaceVariant)),
         ],
-        if (lvl == RiskLevel.safe && site.levelLabel != 'Low risk') ...[
+        if (!compact && lvl == RiskLevel.safe && site.levelLabel != 'Low risk') ...[
           const SizedBox(height: 4),
           Text("No warning signs found yet. That does not prove it's safe.", style: t.labelSmall?.copyWith(color: K.onSurfaceVariant)),
         ],

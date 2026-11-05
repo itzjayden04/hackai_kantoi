@@ -20,7 +20,9 @@ import 'intel_models.dart';
 import 'storage.dart';
 
 const seedAsset = 'assets/intel_seed.json';
-const crawlEvery = Duration(hours: 4);
+/// How old the scam map may get before the app updates it by itself. Short
+/// enough to feel live, long enough not to hammer the public sources.
+const crawlEvery = Duration(minutes: 30);
 
 /// Optional abuse.ch key for URLhaus, set at build time. Users can override
 /// it in Settings.

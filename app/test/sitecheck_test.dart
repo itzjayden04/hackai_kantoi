@@ -409,7 +409,7 @@ void main() {
     await t.pump(const Duration(milliseconds: 500));
     expect(find.byType(SiteSummaryCard), findsOneWidget);
     expect(find.text('Online gambling site – illegal in Malaysia'), findsWidgets);
-    expect(find.text('HIGH RISK'), findsOneWidget);
+    expect(find.text('High risk'), findsOneWidget);
     expect(find.text('Tranco top-sites list'), findsOneWidget);
   });
 

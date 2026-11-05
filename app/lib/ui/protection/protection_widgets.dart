@@ -45,7 +45,7 @@ class ShieldCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.12), shape: BoxShape.circle),
-            child: Icon(on ? Icons.verified_user_rounded : Icons.shield_outlined, color: Colors.white),
+            child: Icon(on ? Icons.verified_user_rounded : Icons.verified_user_outlined, color: Colors.white),
           ),
           const SizedBox(width: 14),
           Expanded(

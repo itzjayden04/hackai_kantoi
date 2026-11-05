@@ -22,7 +22,7 @@ class ScamStoryPage extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final accent = e.genuine ? K.green : K.red;
     return Scaffold(
-      appBar: AppBar(title: Text(e.name)),
+      appBar: AppBar(automaticallyImplyLeading: false, title: Text(e.name)),
       body: PageBody(children: [
         Reveal(
           child: KCard(

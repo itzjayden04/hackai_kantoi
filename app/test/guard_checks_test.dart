@@ -143,7 +143,7 @@ void main() {
     expect(find.text('Pages blocked'), findsOneWidget);
     expect(find.text('Calls'), findsOneWidget);
     expect(find.text('Web & link blocker'), findsOneWidget);
-    expect(find.text('5 ON'), findsOneWidget);
+    expect(find.text('5 on'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('pos-tracking-my.top'), 300);
     expect(find.text('pos-tracking-my.top'), findsOneWidget);
   });

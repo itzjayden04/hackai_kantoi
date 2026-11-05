@@ -206,7 +206,7 @@ class AccountSection extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       child: Row(
                         children: [
-                          const Icon(Icons.shield_outlined, size: 16, color: K.primary),
+                          const Icon(Icons.verified_user_outlined, size: 16, color: K.primary),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -299,7 +299,7 @@ class AccountSection extends StatelessWidget {
 }
 
 IconData historyIcon(HistoryType t) => switch (t) {
-  HistoryType.check => Icons.shield_outlined,
+  HistoryType.check => Icons.verified_user_outlined,
   HistoryType.trace => Icons.hub_outlined,
   HistoryType.learn => Icons.school_outlined,
   HistoryType.report => Icons.flag_outlined,
@@ -412,7 +412,7 @@ class _HistoryLogPageState extends State<HistoryLogPage> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('History')),
+      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('History')),
       body: ListenableBuilder(
         listenable: historyLog,
         builder: (context, _) {

@@ -19,7 +19,7 @@ class RelationshipScreen extends StatelessWidget {
   const RelationshipScreen({super.key});
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Check a person or chat')),
+        appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Check a person or chat')),
         body: const RelationshipPage(),
       );
 }
@@ -113,7 +113,7 @@ class _RelationshipPageState extends State<RelationshipPage> {
       Row(children: [
         const IconTile(Icons.people_outline_rounded, size: 44),
         const SizedBox(width: 12),
-        Expanded(child: Text('Can I trust this person?', style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w700))),
+        Expanded(child: Text('Can I trust this person?', style: t.headlineMedium)),
       ]),
       const SizedBox(height: 8),
       Text('Love, investment and job scams build trust over weeks before asking for money. '

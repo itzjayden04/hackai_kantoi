@@ -88,7 +88,6 @@ class TraceHud extends StatelessWidget {
     final statusColor = s.finished ? K.green : (paused ? K.amber : K.red);
     final lvl = riskColor(s.level);
     const muted = TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.4, color: Color(0xFF94A3B8));
-    final origin = s.originId == null ? null : s.nodes[s.originId];
     Widget stat(String k, Widget v) => Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(k, style: muted), const SizedBox(height: 4), v]),
         );
@@ -114,27 +113,39 @@ class TraceHud extends StatelessWidget {
             ]),
           ),
         ]),
-        const SizedBox(height: 10),
-        const Text('Investigation canvas', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
-        const SizedBox(height: 4),
-        Row(children: [
-          Icon(origin == null ? Icons.travel_explore_rounded : traceIcon(origin.kind), size: 15, color: origin?.flagged == true ? const Color(0xFFF87171) : const Color(0xFF93C5FD)),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text('Target: ${s.target.replaceAll(RegExp(r'\s+'), ' ')}',
-                maxLines: 1, overflow: TextOverflow.ellipsis, style: traceMono.copyWith(fontSize: 12.5, color: origin?.flagged == true ? const Color(0xFFF87171) : const Color(0xFFCBD5E1))),
-          ),
-        ]),
-        const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(color: K.nightLine, height: 1)),
+        const SizedBox(height: 16),
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // The results are the point of the card, so they are big.
           stat('Risk level', Row(children: [
-            Container(width: 8, height: 8, decoration: BoxDecoration(color: lvl, shape: BoxShape.circle)),
-            const SizedBox(width: 6),
-            Flexible(child: Text(s.riskLabel, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color.lerp(lvl, Colors.white, 0.25)))),
+            Container(width: 11, height: 11, decoration: BoxDecoration(color: lvl, shape: BoxShape.circle)),
+            const SizedBox(width: 8),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(s.riskLabel, style: TextStyle(fontSize: 24, height: 1.2, fontWeight: FontWeight.w800, color: Color.lerp(lvl, Colors.white, 0.2))),
+              ),
+            ),
           ])),
-          stat('Nodes linked', Text('${s.entityCount} found', style: traceMono.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white))),
-          stat('Countries',
-              Text(s.countries.isEmpty ? '–' : s.countries.join(' / '), style: traceMono.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white))),
+          stat(
+            'Nodes linked',
+            Text.rich(
+              TextSpan(children: [
+                TextSpan(text: '${s.entityCount}', style: const TextStyle(fontSize: 24, height: 1.2, fontWeight: FontWeight.w800)),
+                const TextSpan(text: ' found', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8))),
+              ]),
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+          stat(
+            'Countries',
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(s.countries.isEmpty ? '–' : s.countries.join(' / '),
+                  style: const TextStyle(fontSize: 24, height: 1.2, fontWeight: FontWeight.w800, color: Colors.white)),
+            ),
+          ),
         ]),
       ]),
     );
@@ -585,7 +596,7 @@ class TraceFindingsPage extends StatelessWidget {
     final good = s.flags.where((f) => !f.isRisk).toList();
     final semak = s.nodes.values.where((n) => n.kind == TraceKind.phone || n.kind == TraceKind.account).toList();
     return Scaffold(
-      appBar: AppBar(title: const Text('Full findings'), actions: [
+      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Full findings'), actions: [
         IconButton(tooltip: 'Share as text', onPressed: () => shareTraceText(context, s), icon: const Icon(Icons.share_outlined)),
       ]),
       body: PageBody(children: [
