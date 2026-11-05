@@ -16,7 +16,7 @@ class ReviewQueuePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Feedback for review')),
+      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Feedback for review')),
       body: ListenableBuilder(
         listenable: localStore,
         builder: (context, _) {

@@ -33,13 +33,12 @@ void main() {
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
     await tester.pump();
     expect(find.text('Start trace'), findsOneWidget);
-    expect(find.text('Demo data'), findsWidgets);
+    expect(find.text('DEMO'), findsWidgets);
 
     await tester.enterText(find.byKey(const ValueKey('trace-input')), 'https://maybank2u-secure.top/login');
     await tester.tap(find.text('Start trace'));
     await _settleTrace(tester);
 
-    expect(find.text('Investigation canvas'), findsOneWidget);
     expect(find.text('TRACE COMPLETE'), findsOneWidget);
     expect(find.text('Investigation audit feed'), findsOneWidget);
     expect(find.textContaining('related entit'), findsOneWidget);
@@ -47,7 +46,7 @@ void main() {
     // Back keeps a finished map; only "New trace" clears it.
     expect(appState.backHandlers[1]!(), isFalse);
     await tester.pump();
-    expect(find.text('Investigation canvas'), findsOneWidget);
+    expect(find.text('TRACE COMPLETE'), findsOneWidget);
 
     await tester.ensureVisible(find.text('View full findings'));
     await tester.pump();

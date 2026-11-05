@@ -63,7 +63,9 @@ Future<void> showSafeWordReminder(BuildContext context) async {
 
 /// The safe word card on the Emergency tab.
 class VaultCard extends StatefulWidget {
-  const VaultCard({super.key});
+  /// A single list row (for a grouped card) instead of a full card.
+  final bool row;
+  const VaultCard({super.key, this.row = false});
   @override
   State<VaultCard> createState() => _VaultCardState();
 }
@@ -90,6 +92,21 @@ class _VaultCardState extends State<VaultCard> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final n = vault.count;
+    if (widget.row) {
+      return Tooltip(
+        message: n == 0 ? 'Set up the vault' : 'Open vault',
+        child: KGroupRow(
+          icon: Icons.key_rounded,
+          leading: const TintIcon(Icons.key_rounded, color: Color(0xFF8B4A00), background: K.tertiaryFixed, size: 44),
+          label: 'Safe word vault',
+          subtitle: n > 0 ? '$n saved · Encrypted' : 'Encrypted',
+          subtitleIcon: Icons.lock_rounded,
+          trailing: Icons.north_east_rounded,
+          trailingColor: K.blue,
+          onTap: () => openVault(context),
+        ),
+      );
+    }
     return KCard(
       padding: const EdgeInsets.all(18),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -102,13 +119,10 @@ class _VaultCardState extends State<VaultCard> {
                 Expanded(child: Text('Safe word vault', style: t.titleMedium)),
                 const Pill('Encrypted', color: Color(0xFF8B4A00), icon: Icons.lock_rounded),
               ]),
-              const SizedBox(height: 4),
-              Text(
-                n == 0
-                    ? 'Agree a secret word with family, so you can check who is really calling.'
-                    : "Check who's really calling. $n safe word${n == 1 ? '' : 's'} saved on this phone.",
-                style: t.bodyMedium?.copyWith(color: K.onSurfaceVariant),
-              ),
+              if (n > 0) ...[
+                const SizedBox(height: 2),
+                Text('$n saved', style: t.bodySmall),
+              ],
             ]),
           ),
         ]),
@@ -179,7 +193,7 @@ class _VaultPageState extends State<VaultPage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Safe words')),
+      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Safe words')),
       floatingActionButton: vault.unlocked
           ? FloatingActionButton.extended(
               backgroundColor: K.primaryContainer,

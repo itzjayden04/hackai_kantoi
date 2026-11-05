@@ -110,8 +110,8 @@ void main() {
       await t.tap(find.text('Check with Kantoi AI'));
       await t.pump();
       expect(find.textContaining('Paste or type the message first'), findsOneWidget);
-      await t.ensureVisible(find.text('Check a person or chat'));
-      await t.tap(find.text('Check a person or chat'));
+      await t.ensureVisible(find.text('Check a person'));
+      await t.tap(find.text('Check a person'));
       await t.pump();
       await t.pump(const Duration(seconds: 1));
       expect(find.byType(RelationshipScreen), findsOneWidget);

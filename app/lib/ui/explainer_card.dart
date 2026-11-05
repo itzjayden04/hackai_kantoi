@@ -138,7 +138,7 @@ class ExplainerPage extends StatelessWidget {
   const ExplainerPage({super.key, required this.e});
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(e.name)),
+        appBar: AppBar(automaticallyImplyLeading: false, title: Text(e.name)),
         body: PageBody(children: [ExplainerCard(e: e)]),
       );
 }

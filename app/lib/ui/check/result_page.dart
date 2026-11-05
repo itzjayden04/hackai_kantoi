@@ -13,7 +13,7 @@ class ResultPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Check result')),
+    appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Check result')),
     body: PageBody(children: [ResultView(inv: inv, inlineActions: false)]),
     bottomNavigationBar: StickyActions(
       inv: inv,

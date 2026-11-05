@@ -24,7 +24,7 @@ class _CheckupPageState extends State<CheckupPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Safety check-up')),
+        appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Safety check-up')),
         body: ListenableBuilder(
           listenable: checkup,
           builder: (context, _) {

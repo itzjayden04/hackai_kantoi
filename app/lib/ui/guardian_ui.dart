@@ -114,7 +114,7 @@ class _GuardianPageState extends State<GuardianPage> {
     final canSave = _name.text.trim().isNotEmpty && _phoneOk;
     final preview = guardianAlert(guardianName: _name.text, inv: null);
     return Scaffold(
-      appBar: AppBar(title: const Text('Family guardian')),
+      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Family guardian')),
       body: PageBody(children: [
         Text('Pick someone you trust, like a son, daughter or close friend. When Kantoi finds something very likely to be a scam, '
             'or you open Emergency, you can tell them in one tap.', style: t.bodyMedium?.copyWith(height: 1.4)),
@@ -218,12 +218,9 @@ class _GuardianStatusTileState extends State<GuardianStatusTile> {
                           : g == null
                               ? 'Add a family guardian'
                               : 'Guardian needs your consent',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                      style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 2),
-                  Text(
-                      ready
-                          ? 'You can tell ${g!.name} in one tap if something looks dangerous.'
-                          : 'Someone you trust, told in one tap when a message is very likely a scam.',
+                  Text(ready ? 'Ready to alert in one tap' : 'Someone you trust',
                       style: Theme.of(context).textTheme.bodySmall),
                 ]),
               ),

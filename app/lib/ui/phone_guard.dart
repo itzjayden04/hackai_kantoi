@@ -88,7 +88,7 @@ class _GuardAlertDetailState extends State<GuardAlertDetail> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(widget.alert.chat)),
+        appBar: AppBar(automaticallyImplyLeading: false, title: Text(widget.alert.chat)),
         body: FutureBuilder<Investigation>(
           future: _inv,
           builder: (context, snap) => snap.hasData

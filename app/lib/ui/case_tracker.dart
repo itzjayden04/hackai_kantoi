@@ -28,121 +28,130 @@ class CaseChecklist extends StatelessWidget {
       listenable: localStore,
       builder: (context, _) {
         final c = localStore.caseFor(caseId, title: title);
-        final n = c.done.length.clamp(0, caseSteps.length);
-        final all = n == caseSteps.length;
-        return KCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Row(children: [
-              const Icon(Icons.checklist_rtl_rounded, color: K.primary),
-              const SizedBox(width: 8),
-              Expanded(child: Text('Stop the damage', style: t.titleMedium)),
-              const SizedBox(width: 8),
-              Pill('$n of ${caseSteps.length} done', color: all ? K.green : K.primary),
-            ]),
-            const SizedBox(height: 4),
-            Text('Do these in order. Tap each step when it is done.', style: t.bodySmall?.copyWith(color: K.secondary)),
-            const SizedBox(height: 12),
-            KProgressBar(value: n / caseSteps.length, color: all ? K.green : K.primaryContainer, height: 6),
-            const SizedBox(height: 12),
-            for (final (i, s) in caseSteps.indexed)
-              _StepTile(
-                index: i + 1,
-                step: s,
-                done: c.done.containsKey(s.id),
-                compact: compact,
-                onTap: () => localStore.setStep(c, s.id, !c.done.containsKey(s.id)),
-              ),
-            const SizedBox(height: 4),
-            Row(children: [
-              const Icon(Icons.lock_outline_rounded, size: 14, color: K.outline),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text('Saved on this phone only. Kantoi reminds you about steps not done yet.',
-                    style: t.labelSmall?.copyWith(color: K.outline)),
-              ),
-            ]),
+        final total = caseSteps.length;
+        final n = c.done.length.clamp(0, total);
+        // The next step to do can unfold its explanation.
+        final next = caseSteps.indexWhere((s) => !c.done.containsKey(s.id));
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          // Title and its "i" on the left, "0 of 7 done" in blue on the right,
+          // a progress bar under them.
+          Row(children: [
+            Expanded(
+              child: Row(children: [
+                Flexible(child: Text('Stop the damage', style: t.titleLarge?.copyWith(fontSize: 20))),
+                const SizedBox(width: 6),
+                const InfoButton(
+                  title: 'Stop the damage',
+                  message: 'Tick each step as you go. Your progress is saved on this phone only, so you can come back to it.',
+                ),
+              ]),
+            ),
+            Text('$n of $total done', style: t.titleSmall?.copyWith(color: n == total ? K.green : K.blue, fontWeight: FontWeight.w500)),
           ]),
-        );
+          const SizedBox(height: 10),
+          KProgressBar(value: n / total, color: n == total ? K.green : K.blue, height: 8),
+          const SizedBox(height: 14),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.all(Radius.circular(18)),
+              border: Border.all(color: K.outlineVariant.withValues(alpha: 0.7)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Column(children: [
+              for (final (i, s) in caseSteps.indexed) ...[
+                if (i > 0) const Divider(height: 1, thickness: 1, color: K.surfaceHigh),
+                _StepTile(
+                  index: i + 1,
+                  step: s,
+                  done: c.done.containsKey(s.id),
+                  canExplain: !compact && i == next,
+                  onTap: () => localStore.setStep(c, s.id, !c.done.containsKey(s.id)),
+                ),
+              ],
+            ]),
+          ),
+        ]);
       },
     );
   }
 }
 
-class _StepTile extends StatelessWidget {
+/// One step: a round tick on the left, the step and its "Urgent" mark, and
+/// for the next step to do an "i" and a fold-out explanation.
+class _StepTile extends StatefulWidget {
   final int index;
   final CaseStep step;
   final bool done;
-  final bool compact;
+  final bool canExplain;
   final VoidCallback onTap;
-  const _StepTile({required this.index, required this.step, required this.done, required this.compact, required this.onTap});
+  const _StepTile({required this.index, required this.step, required this.done, required this.canExplain, required this.onTap});
+
+  @override
+  State<_StepTile> createState() => _StepTileState();
+}
+
+class _StepTileState extends State<_StepTile> {
+  bool _open = false;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Semantics(
-        checked: done,
-        button: true,
-        child: Material(
-          color: done ? K.surfaceMid : K.surfaceLow,
-          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: compact ? 10 : 12),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                AnimatedContainer(
-                  duration: K.fast,
-                  curve: K.curve,
-                  width: 24,
-                  height: 24,
-                  margin: const EdgeInsets.only(top: 1),
-                  decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.all(Radius.circular(6)),
-                    color: done ? K.primaryContainer : Colors.white,
-                    border: Border.all(color: done ? K.primaryContainer : K.outline, width: 2),
-                  ),
-                  child: AnimatedSwitcher(
-                    duration: K.fast,
-                    transitionBuilder: (w, a) => ScaleTransition(scale: a, child: w),
-                    child: done
-                        ? const Icon(Icons.check_rounded, key: ValueKey(1), size: 16, color: Colors.white)
-                        : Text('$index',
-                            key: const ValueKey(0),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: K.outline, height: 1.6)),
-                  ),
+    final done = widget.done;
+    return Semantics(
+      checked: done,
+      button: true,
+      child: InkWell(
+        onTap: widget.onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              AnimatedContainer(
+                duration: K.fast,
+                curve: K.curve,
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: done ? K.blue : Colors.white,
+                  border: Border.all(color: done ? K.blue : K.outline, width: 1.5),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    AnimatedDefaultTextStyle(
-                      duration: K.fast,
-                      style: (t.titleSmall ?? const TextStyle()).copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: done ? K.outline : K.onSurface,
-                        decoration: done ? TextDecoration.lineThrough : null,
-                      ),
-                      child: Text.rich(TextSpan(children: [
-                        TextSpan(text: step.title),
-                        if (index <= 2 && !done)
-                          const WidgetSpan(
-                            alignment: PlaceholderAlignment.middle,
-                            child: Padding(padding: EdgeInsets.only(left: 6), child: Pill('Urgent', color: K.error)),
-                          ),
-                      ])),
-                    ),
-                    if (!compact) ...[
-                      const SizedBox(height: 2),
-                      Text(step.help, style: t.bodySmall),
-                    ],
+                child: done ? const Icon(Icons.check_rounded, size: 16, color: Colors.white) : null,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(children: [
+                    TextSpan(text: widget.step.title),
+                    if (widget.index <= 2 && !done)
+                      TextSpan(text: '   Urgent', style: t.labelMedium?.copyWith(color: K.error, fontWeight: FontWeight.w500)),
                   ]),
+                  style: t.bodyLarge?.copyWith(fontSize: 15, color: done ? K.outline : K.onSurface, height: 1.35),
                 ),
-              ]),
+              ),
+              if (widget.canExplain) ...[
+                InfoButton(title: widget.step.title, message: widget.step.help),
+                IconButton(
+                  tooltip: _open ? 'Hide' : 'Why',
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(_open ? Icons.expand_less_rounded : Icons.expand_more_rounded, color: K.outline),
+                  onPressed: () => setState(() => _open = !_open),
+                ),
+              ],
+            ]),
+            AnimatedSize(
+              duration: K.medium,
+              curve: K.curve,
+              alignment: Alignment.topCenter,
+              child: widget.canExplain && _open
+                  ? Padding(
+                      padding: const EdgeInsets.fromLTRB(38, 6, 8, 0),
+                      child: Text(widget.step.help, style: t.bodySmall?.copyWith(color: K.outline)),
+                    )
+                  : const SizedBox(width: double.infinity),
             ),
-          ),
+          ]),
         ),
       ),
     );

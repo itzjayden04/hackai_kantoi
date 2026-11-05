@@ -56,7 +56,7 @@ class PrivacyNoticePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Privacy Notice and Terms')),
+      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Privacy Notice and Terms')),
       body: PageBody(children: [
         Text('Version $consentVersion', style: t.labelMedium?.copyWith(color: K.outline)),
         const SizedBox(height: 12),

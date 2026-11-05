@@ -32,10 +32,10 @@ void main() {
     await t.pumpWidget(MaterialApp(home: ReportPage(inv: inv, initial: Situation.lostMoney)));
     expect(find.textContaining('Evidence screenshots'), findsOneWidget);
     expect(find.text('Incident sheet'), findsOneWidget);
-    expect(find.text('FOR POLICE'), findsOneWidget);
+    expect(find.text('For Police'), findsOneWidget);
     await t.tap(find.text('MCMC'));
     await t.pump(const Duration(milliseconds: 600));
-    expect(find.text('FOR MCMC'), findsOneWidget);
+    expect(find.text('For MCMC'), findsOneWidget);
     expect(find.text('Copy all'), findsOneWidget);
     // Masking can be switched off.
     await t.tap(find.byType(Switch).first);
@@ -47,10 +47,10 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('Call 997 now'), findsOneWidget);
     expect(find.text('Stop the damage'), findsOneWidget);
-    expect(find.text('0 OF ${caseSteps.length} DONE'), findsOneWidget);
+    expect(find.text('0 of ${caseSteps.length} done'), findsOneWidget);
     await t.tap(find.text('Keep the evidence'));
     await t.pumpAndSettle();
-    expect(find.text('1 OF ${caseSteps.length} DONE'), findsOneWidget);
+    expect(find.text('1 of ${caseSteps.length} done'), findsOneWidget);
     await t.ensureVisible(find.text('Call my bank'));
     await t.tap(find.text('Call my bank'));
     await t.pumpAndSettle();

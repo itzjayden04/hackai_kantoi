@@ -346,14 +346,14 @@ class _PermissionsStepState extends State<PermissionsStep> with WidgetsBindingOb
               ),
               const SizedBox(height: 16),
               KCard(
-                color: K.primaryContainer,
+                color: K.navy,
                 borderColor: Colors.transparent,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.shield_rounded, color: Colors.white),
+                        const Icon(Icons.verified_user_rounded, color: Colors.white),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text('$done of $total turned on', style: t.titleMedium?.copyWith(color: Colors.white)),
@@ -398,7 +398,7 @@ class _PermissionsStepState extends State<PermissionsStep> with WidgetsBindingOb
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           child: FilledButton.icon(
             onPressed: _s.setupComplete ? widget.onDone : (next == null ? null : () => _allow(next)),
-            icon: Icon(_s.setupComplete ? Icons.shield_rounded : Icons.arrow_forward_rounded),
+            icon: Icon(_s.setupComplete ? Icons.verified_user_rounded : Icons.arrow_forward_rounded),
             label: Text(_s.setupComplete ? 'Finish setup' : 'Turn on: ${next?.title ?? ''}'),
           ),
         ),
@@ -540,7 +540,7 @@ class _Next extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 12,
-          backgroundColor: K.primary,
+          backgroundColor: K.navy,
           child: Text(
             '$n',
             style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
@@ -553,6 +553,25 @@ class _Next extends StatelessWidget {
   );
 }
 
+/// The small spaced-out "K A N T O I" wordmark with a shield outline, at the
+/// top of every tab: white on a dark background, dark navy on a light one.
+class KantoiWordmark extends StatelessWidget {
+  final bool light;
+  const KantoiWordmark({super.key, this.light = false});
+
+  static const _darkNavy = Color(0xFF0F2A55);
+
+  @override
+  Widget build(BuildContext context) {
+    final c = light ? Colors.white : _darkNavy;
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(Icons.verified_user_outlined, color: c, size: 22),
+      const SizedBox(width: 10),
+      Text('KANTOI', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 4, color: c)),
+    ]);
+  }
+}
+
 /// The Kantoi mark and name.
 class KantoiLogo extends StatelessWidget {
   final double size;
@@ -561,19 +580,16 @@ class KantoiLogo extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [K.primaryContainer, K.primary], begin: Alignment.topLeft, end: Alignment.bottomRight),
-          borderRadius: BorderRadius.circular(size * 0.3),
+      Icon(Icons.verified_user, color: K.navy, size: size * 0.8),
+      SizedBox(width: size * 0.22),
+      Flexible(
+        child: Text(
+          'Kantoi',
+          maxLines: 1,
+          overflow: TextOverflow.fade,
+          softWrap: false,
+          style: TextStyle(fontSize: size * 0.66, fontWeight: FontWeight.w600, letterSpacing: -0.5, color: K.navy),
         ),
-        child: Icon(Icons.verified_user, color: Colors.white, size: size * 0.62),
-      ),
-      SizedBox(width: size * 0.3),
-      Text(
-        'Kantoi',
-        style: TextStyle(fontSize: size * 0.62, fontWeight: FontWeight.w800, letterSpacing: -0.4, color: K.primary),
       ),
     ],
   );
