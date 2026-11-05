@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../cloud/detection.dart';
+import '../cloud/outbox.dart';
 import '../engine/models.dart';
 import '../engine/relationship.dart';
 import '../engine/review.dart';
@@ -29,6 +31,8 @@ class _FeedbackBarState extends State<FeedbackBar> {
       kind: widget.inv != null ? 'message' : 'relationship',
       summary: summary,
     ));
+    // A detection waiting to be shared is taken back when the user says it was genuine.
+    if (label == UserLabel.legit && widget.inv != null) await cloudOutbox.withdraw('detections', detectionId(widget.inv!));
     if (!mounted) return;
     setState(() => _sent = label);
   }

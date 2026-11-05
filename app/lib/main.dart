@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'auth/auth_service.dart';
+import 'auth/firebase_auth_backend.dart';
+import 'cloud/firebase_setup.dart';
+import 'cloud/firestore_sink.dart';
 import 'cloud/outbox.dart';
 import 'guard/guard_background.dart';
 import 'history/history_log.dart';
@@ -31,8 +35,19 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await appState.load();
   await localStore.load();
+  // Without Firebase settings (or if it fails to start) accounts stay on the
+  // phone and shared records wait in the outbox.
+  if (await startFirebase()) {
+    auth.backend = FirebaseAuthBackend();
+    cloudOutbox.sink = FirestoreSink();
+  }
   await auth.load();
   await Future.wait([historyLog.load(), reportStore.load(), cloudOutbox.load(), vault.load()]);
+  // Send anything queued while offline or signed out.
+  auth.addListener(() {
+    if (auth.signedIn) unawaited(cloudOutbox.flush());
+  });
+  unawaited(cloudOutbox.flush());
   await startTelegramBot();
   final firstRun = guardSupported && !await setupSeen();
   runApp(KantoiApp(firstRun: firstRun, needsLogin: !auth.signedIn, loginRequired: true));
@@ -83,7 +98,9 @@ class _KantoiAppState extends State<KantoiApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState s) {
-    if (s == AppLifecycleState.resumed && (widget.needsLogin || widget.loginRequired)) auth.checkInactivity();
+    if (s != AppLifecycleState.resumed) return;
+    if (widget.needsLogin || widget.loginRequired) auth.checkInactivity();
+    unawaited(cloudOutbox.flush());
   }
 
   @override

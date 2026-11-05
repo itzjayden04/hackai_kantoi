@@ -115,7 +115,10 @@ class LocalStore extends ChangeNotifier {
 
   /// "Delete all my Kantoi data": clears every stored value, including
   /// settings. Only the AI key built into the app (a constant) remains.
+  /// The account goes first: when that fails (e.g. offline) it throws
+  /// [AuthProblem] and nothing on the phone is deleted yet.
   Future<void> deleteAll() async {
+    await auth.deleteAccount();
     review.clear();
     cases.clear();
     retention = defaultRetention;
@@ -125,7 +128,6 @@ class LocalStore extends ChangeNotifier {
     await cloudOutbox.clear();
     await vault.deleteAll();
     vault.lock();
-    await auth.deleteAccount();
     try {
       final p = await SharedPreferences.getInstance();
       await p.clear();

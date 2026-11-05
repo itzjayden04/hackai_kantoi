@@ -337,8 +337,9 @@ String _entityName(EntityType t) => switch (t) {
 
 Verdict _verdict(List<Finding> f, List<UrlReport> urls, Map<String, dynamic>? ai, List<LogStep> log, List<Entity> entities,
     [IntakeExtras? extras, List<WebIntelResult> web = const [], List<SiteReport> sites = const []]) {
-  // Each category counts once at full weight so a long message can't pile up
-  // points by repeating the same word.
+  // Weights add up per category. Repeats of one rule are already damped in
+  // detectCues, so repeating a word adds little; different rules in the same
+  // category do stack.
   final byCat = <CueCategory, int>{};
   var legit = 0;
   for (final x in f) {

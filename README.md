@@ -126,12 +126,13 @@ The app works without these. Each one switches on one extra online check. Add th
 | `GEMINI_API_KEY` | AI explanations, screenshot reading, voice transcripts |
 | `KANTOI_1` | A backup Gemini key (from a different Google Cloud project) used when the first one hits its quota |
 | `OTP_URL`, `OTP_APP_KEY` | The free email-code sender for sign-up (see [server/otp/README.md](server/otp/README.md)) |
+| `FIREBASE_API_KEY`, `FIREBASE_APP_ID`, `FIREBASE_PROJECT_ID`, `FIREBASE_SENDER_ID` | Online accounts and the shared scam database in Firebase (see [docs/firebase-setup.md](docs/firebase-setup.md)). Without them accounts stay on the phone |
 | `GOOGLE_SERVER_CLIENT_ID` | "Continue with Google" (a Web OAuth client ID from the same Google Cloud project as the Android client) |
 | `VIRUSTOTAL_API_KEY` | Link, website and file-fingerprint reputation from 70+ security companies, plus fresh scans of unknown links (free key: 4 lookups a minute, which Kantoi stays within) |
 | `SAFE_BROWSING_API_KEY` | Google's phishing list |
 | `URLSCAN_API_KEY` | A screenshot of the scam page from a remote isolated browser |
 | `ABUSECH_AUTH_KEY` | URLhaus feed for the scam map and link checks |
-| `TELEGRAM_BOT_TOKEN` | The Kantoi Telegram bot, while the app is open |
+| `TELEGRAM_BOT_TOKEN` | The Kantoi Telegram bot, while the app is open. Desktop builds only, so it is not built into the Android APK; paste it in Settings on desktop |
 
 ## Demo script (about 4 minutes)
 
@@ -149,6 +150,8 @@ Other messages the scammer can try: a parcel fee SMS with a fake Pos Laju link, 
 ## Build from source
 
 Requires Flutter 3.47 or later.
+
+**On Windows:** follow [Build Kantoi from source on a Windows PC](docs/build-on-windows.md), then run `powershell -ExecutionPolicy Bypass -File .\build-windows.ps1` from this folder. It runs the steps below and leaves `Kantoi-android.apk` in this folder. Keys go in `app/secrets.json` (copy `app/secrets.example.json`).
 
 ```sh
 cd app

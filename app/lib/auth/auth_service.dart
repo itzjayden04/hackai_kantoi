@@ -17,8 +17,9 @@ abstract class AuthBackend {
   /// Signs in with username or email and password, or throws [AuthProblem].
   Future<KantoiUser> signInPassword(String usernameOrEmail, String password);
 
-  /// Records (or finds) a Google account.
-  Future<KantoiUser> signInGoogle({required String id, required String email, required String name, DateTime? now});
+  /// Records (or finds) a Google account. [idToken] is Google's proof of the
+  /// account, needed by a server backend.
+  Future<KantoiUser> signInGoogle({required String id, required String email, required String name, DateTime? now, String? idToken});
 
   Future<void> deleteAccount(KantoiUser u);
 
@@ -27,6 +28,18 @@ abstract class AuthBackend {
 
   /// Sets a new password after the email code was verified ([proof]).
   Future<void> resetPassword(String email, String password, {required String proof});
+
+  /// Accounts live online: a forgotten password is reset by an emailed link
+  /// ([sendResetLink]), and deleting the account also removes shared records.
+  bool get isCloud;
+
+  /// Emails a password reset link (cloud accounts only).
+  Future<void> sendResetLink(String email);
+
+  /// Whether the user remembered on this phone is still signed in here.
+  Future<bool> restoreSession(KantoiUser cached);
+
+  Future<void> signOut();
 }
 
 class AuthProblem implements Exception {
@@ -97,7 +110,7 @@ class LocalAuthBackend implements AuthBackend {
   }
 
   @override
-  Future<KantoiUser> signInGoogle({required String id, required String email, required String name, DateTime? now}) async {
+  Future<KantoiUser> signInGoogle({required String id, required String email, required String name, DateTime? now, String? idToken}) async {
     final all = await _all();
     for (final a in all) {
       final u = KantoiUser.fromJson((a['user'] as Map).cast<String, dynamic>());
@@ -136,6 +149,18 @@ class LocalAuthBackend implements AuthBackend {
     a['hash'] = hashPassword(password, salt);
     await _save(all);
   }
+
+  @override
+  bool get isCloud => false;
+
+  @override
+  Future<void> sendResetLink(String email) => throw UnsupportedError('Phone accounts reset with an email code.');
+
+  @override
+  Future<bool> restoreSession(KantoiUser cached) async => true;
+
+  @override
+  Future<void> signOut() async {}
 }
 
 /// The signed-in user, the 7-day inactivity rule and the sign-in flows.
@@ -166,6 +191,8 @@ class AuthService extends ChangeNotifier {
       final s = p.getString(_kUser);
       user = s == null ? null : KantoiUser.fromJson(jsonDecode(s) as Map<String, dynamic>);
       lastActive = DateTime.tryParse(p.getString(_kActive) ?? '');
+      // E.g. a phone account from before Firebase, or a session Firebase ended.
+      if (user != null && !await backend.restoreSession(user!)) await _setUser(null);
     } catch (_) {
       user = null;
     }
@@ -248,6 +275,23 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  /// Cloud accounts reset a forgotten password by an emailed link instead of
+  /// a code.
+  bool get resetsByLink => backend.isCloud;
+
+  /// Forgot password for cloud accounts: emails a reset link. The answer is
+  /// the same whether or not the email has an account.
+  Future<String?> sendResetLink(String email) async {
+    final e = email.trim().toLowerCase();
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(e)) return 'Enter the email you registered with.';
+    try {
+      await backend.sendResetLink(e);
+      return null;
+    } on AuthProblem catch (x) {
+      return x.message;
+    }
+  }
+
   /// Forgot password, step 1: sends a code if an email account exists.
   Future<String?> startReset(String email) async {
     final e = email.trim().toLowerCase();
@@ -284,6 +328,11 @@ class AuthService extends ChangeNotifier {
 
   /// Google's account picker. Returns a problem, or null when signed in.
   Future<String?> signInGoogle() async {
+    // Android needs the Web client ID (GOOGLE_SERVER_CLIENT_ID) at build time;
+    // without it Google always fails with a technical error.
+    if (_googleServerClientId.isEmpty) {
+      return "Google sign-in isn't set up in this version of Kantoi. Please register with your email instead.";
+    }
     try {
       final g = GoogleSignIn.instance;
       if (!_googleReady) {
@@ -292,10 +341,15 @@ class AuthService extends ChangeNotifier {
       }
       if (!g.supportsAuthenticate()) return 'Google sign-in is not available on this phone.';
       final a = await g.authenticate();
-      await _setUser(await backend.signInGoogle(id: a.id, email: a.email, name: a.displayName ?? a.email));
+      await _setUser(await backend.signInGoogle(
+          id: a.id, email: a.email, name: a.displayName ?? a.email, idToken: a.authentication.idToken));
       return null;
+    } on AuthProblem catch (e) {
+      return e.message;
     } on GoogleSignInException catch (e) {
-      if (e.code == GoogleSignInExceptionCode.canceled) return 'Sign-in cancelled.';
+      // Android also reports setup problems (an unknown app or SHA-1) as
+      // "canceled", so only a cancel with no reason is treated as the user's.
+      if (e.code == GoogleSignInExceptionCode.canceled && (e.description ?? '').trim().isEmpty) return 'Sign-in cancelled.';
       return "Google sign-in didn't work (${e.code.name}${_detail(e.description)}). Try again or register with email.";
     } catch (e) {
       // Shows the underlying reason so a setup problem can be diagnosed.
@@ -316,9 +370,14 @@ class AuthService extends ChangeNotifier {
         await GoogleSignIn.instance.signOut();
       } catch (_) {}
     }
+    try {
+      await backend.signOut();
+    } catch (_) {}
     await _setUser(null);
   }
 
+  /// Deletes the account (and, for cloud accounts, the records it shared),
+  /// then signs out. Throws [AuthProblem] when it could not, e.g. offline.
   Future<void> deleteAccount() async {
     final u = user;
     if (u == null) return;

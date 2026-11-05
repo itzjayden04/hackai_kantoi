@@ -1,6 +1,7 @@
 import '../engine/models.dart';
 import '../engine/taxonomy.dart';
 import '../report/scam_report.dart';
+import '../version.dart' as version;
 import 'outbox.dart';
 
 /// Only confident "very likely a scam" results are shared.
@@ -10,7 +11,7 @@ const shareMinConfidence = 70;
 /// result is not confident enough to teach anyone anything. Holds no message
 /// text, no names and no screenshots: the scam kind, the cue categories that
 /// fired, the app, the hour, website names and one-way codes of numbers.
-Map<String, dynamic>? detectionPayload(Investigation inv, {String? app, String appVersion = '1.2.1'}) {
+Map<String, dynamic>? detectionPayload(Investigation inv, {String? app, String appVersion = version.appVersion}) {
   final v = inv.verdict;
   if (v.level != RiskLevel.danger || v.confidence < shareMinConfidence) return null;
   final ids = <AttackerId>[];
@@ -46,8 +47,12 @@ Map<String, dynamic>? detectionPayload(Investigation inv, {String? app, String a
 }
 
 /// A stable id for a detection, so checking the same message twice is one record.
-String detectionId(Investigation inv) =>
-    identifierCode(AttackerId(IdentifierType.other, '${inv.artefact.receivedAt.millisecondsSinceEpoch}|${inv.artefact.text.hashCode}'));
+/// Built from the sender and the text with spacing evened out (a SHA-256 via
+/// [identifierCode]), not from the check time, which changes on every check.
+String detectionId(Investigation inv) {
+  final text = inv.artefact.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+  return identifierCode(AttackerId(IdentifierType.other, '${inv.artefact.sender ?? ''}|$text'));
+}
 
 /// Queues a detection when sharing is on and the result qualifies.
 Future<bool> shareDetection(Investigation inv, {required bool sharingOn, String? app, Outbox? outbox}) async {

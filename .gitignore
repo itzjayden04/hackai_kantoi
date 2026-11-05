@@ -18,3 +18,12 @@ key.properties
 
 # Local API keys for flutter run --dart-define-from-file (never commit)
 secrets.json
+
+# Firebase config files: the settings go in as FIREBASE_* build values instead
+google-services.json
+.firebaserc
+.firebase/
+
+# Built APKs and local merge backups: never commit
+*.apk
+.merge-backup/

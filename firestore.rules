@@ -1,0 +1,50 @@
+rules_version = '2';
+// Kantoi. Deploy with `firebase deploy --only firestore:rules`, or paste into
+// Firebase console > Firestore Database > Rules.
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function signedIn() { return request.auth != null; }
+    function mine(d) { return signedIn() && d.uid == request.auth.uid; }
+    // Written with FieldValue.serverTimestamp(), so phones cannot back-date.
+    function stamped(d) { return d.at == request.time; }
+
+    match /users/{uid} {
+      allow read, create, update, delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    // username -> {uid, email}; get only (no listing), so names can't be dumped
+    match /usernames/{name} {
+      allow get: if true;
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.email == request.auth.token.email
+                    && request.resource.data.keys().hasOnly(['uid', 'email']);
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow list, update: if false;
+    }
+
+    // Masked, append-only community data. Keys match ScamReport.sharedPayload()
+    // and detectionPayload(), plus uid, at and idCodes added by FirestoreSink.
+    match /reports/{id} {
+      allow create: if mine(request.resource.data) && stamped(request.resource.data)
+        && request.resource.data.keys().hasOnly(['v','kind','group','channel','identifiers','domains',
+             'impersonated','lostMoney','amountMinor','currency','payment','incidentDay',
+             'reportedOfficially','appVersion','uid','at','idCodes'])
+        && request.resource.data.identifiers.size() <= 20
+        && request.resource.data.domains.size() <= 20;
+      allow read: if signedIn();
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow update: if false;
+    }
+
+    match /detections/{id} {
+      allow create: if mine(request.resource.data) && stamped(request.resource.data)
+        && request.resource.data.keys().hasOnly(['v','kind','level','score','confidence','cues','app',
+             'source','hour','domains','identifiers','appVersion','uid','at','idCodes'])
+        && request.resource.data.identifiers.size() <= 20
+        && request.resource.data.domains.size() <= 20;
+      allow read: if signedIn();
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow update: if false;
+    }
+  }
+}
