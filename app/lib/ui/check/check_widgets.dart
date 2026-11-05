@@ -65,7 +65,7 @@ class _ProtectionStatusCardState extends State<ProtectionStatusCard> with Widget
             width: 44,
             height: 44,
             decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-            child: Icon(on ? Icons.shield_rounded : Icons.shield_outlined, color: c, size: 24),
+            child: Icon(on ? Icons.verified_user_rounded : Icons.verified_user_outlined, color: c, size: 24),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -80,17 +80,10 @@ class _ProtectionStatusCardState extends State<ProtectionStatusCard> with Widget
                     if (on) const PulseDot(color: K.green, size: 7),
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  s == null
-                      ? 'Checking...'
-                      : on
-                      ? (today == 0
-                            ? 'Watching chat messages, links and payment apps. No warnings today.'
-                            : '$today warning${today == 1 ? '' : 's'} shown today. Watching chats, links and payment apps.')
-                      : 'Turn it on so Kantoi can warn you before you reply or pay.',
-                  style: t.bodySmall,
-                ),
+                if (s != null && on) ...[
+                  const SizedBox(height: 2),
+                  Text(today == 0 ? 'No warnings today' : '$today warning${today == 1 ? '' : 's'} today', style: t.bodySmall),
+                ],
               ],
             ),
           ),
@@ -118,8 +111,9 @@ String shortRisk(RiskLevel l, [List<Finding> findings = const []]) => switch (l)
   RiskLevel.danger => 'Scam',
 };
 
-/// One past check: risk dot, title, risk pill, where it came from, the main
-/// reason and when.
+/// One past check as a list row: a tinted icon for where it came from, what
+/// it was, the source in small capitals, and the verdict and time on the
+/// right.
 class RecentCheckCard extends StatelessWidget {
   final Investigation inv;
   const RecentCheckCard({super.key, required this.inv});
@@ -130,62 +124,41 @@ class RecentCheckCard extends StatelessWidget {
     final v = inv.verdict;
     final c = riskColor(v.level);
     final detail = sourceDetail(inv);
+    final at = TimeOfDay.fromDateTime(inv.artefact.receivedAt).format(context);
     return KCard(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ResultPage(inv: inv))),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(v.scamType, style: t.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
-              ),
-              const SizedBox(width: 8),
-              Pill(shortRisk(v.level, inv.findings), color: c),
-            ],
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(color: c.withValues(alpha: 0.1), borderRadius: const BorderRadius.all(Radius.circular(14))),
+            child: Icon(sourceIcon(inv.artefact), size: 21, color: c),
           ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Icon(sourceIcon(inv.artefact), size: 16, color: K.onSurfaceVariant),
-              const SizedBox(width: 6),
-              Text(
-                sourceLabel(inv.artefact),
-                style: t.bodySmall?.copyWith(color: K.onSurface, fontWeight: FontWeight.w500),
-              ),
-              if (detail != null) ...[
-                Text('  ·  ', style: t.bodySmall?.copyWith(color: K.outline)),
-                Expanded(
-                  child: Text(
-                    detail,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: t.bodySmall?.copyWith(fontFamily: 'monospace', fontSize: 12),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  shortReason(inv),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(v.scamType, style: t.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 3),
+                Text(
+                  [sourceLabel(inv.artefact), ?detail].join(' · ').toUpperCase(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: t.labelMedium?.copyWith(color: K.onSurfaceVariant),
+                  style: monoCaps(size: 10),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(timeAgo(inv.artefact.receivedAt), style: t.labelMedium?.copyWith(color: K.outline)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(shortRisk(v.level, inv.findings), style: t.titleSmall?.copyWith(color: c, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 3),
+              Text(at.toUpperCase(), style: monoCaps(size: 10)),
             ],
           ),
         ],
@@ -194,27 +167,36 @@ class RecentCheckCard extends StatelessWidget {
   }
 }
 
+/// Past checks under "• TODAY, 5 NOV"-style day headers, newest first.
+List<Widget> datedChecks(List<Investigation> checks, {int revealFrom = 0}) {
+  final out = <Widget>[];
+  String? day;
+  for (final (i, h) in checks.indexed) {
+    final d = dayLabel(h.artefact.receivedAt);
+    if (d != day) {
+      if (day != null) out.add(const SizedBox(height: 10));
+      out.add(DateHeader(d));
+      day = d;
+    }
+    out.add(Reveal(index: revealFrom + i, child: Padding(padding: const EdgeInsets.only(bottom: 8), child: RecentCheckCard(inv: h))));
+  }
+  return out;
+}
+
 /// Every check kept on this phone.
 class HistoryPage extends StatelessWidget {
   const HistoryPage({super.key});
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Recent checks')),
+    appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Recent checks')),
     body: ListenableBuilder(
       listenable: appState,
       builder: (context, _) => PageBody(
         children: [
           Text('Kept on this phone only. Old checks are deleted automatically (see Settings).', style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           if (appState.history.isEmpty) const Text('No checks yet.'),
-          for (final (i, h) in appState.history.indexed)
-            Reveal(
-              index: i,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: RecentCheckCard(inv: h),
-              ),
-            ),
+          ...datedChecks(appState.history),
         ],
       ),
     ),
@@ -225,10 +207,10 @@ class HistoryPage extends StatelessWidget {
 class WayInTile extends StatelessWidget {
   final IconData icon;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final Color color;
   final VoidCallback onTap;
-  const WayInTile({super.key, required this.icon, required this.title, required this.subtitle, this.color = K.primary, required this.onTap});
+  const WayInTile({super.key, required this.icon, required this.title, this.subtitle, this.color = K.primary, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -247,10 +229,9 @@ class WayInTile extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             title,
-            style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: K.onSurface),
+            style: t.titleMedium?.copyWith(color: K.onSurface),
           ),
-          const SizedBox(height: 2),
-          Text(subtitle, style: t.bodySmall),
+          if (subtitle != null) ...[const SizedBox(height: 2), Text(subtitle!, style: t.bodySmall)],
         ],
       ),
     );

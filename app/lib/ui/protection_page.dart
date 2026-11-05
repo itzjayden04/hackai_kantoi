@@ -62,7 +62,7 @@ class _ProtectionPageState extends State<ProtectionPage> with WidgetsBindingObse
       showKToast(context,
           title: on ? 'Auto-protection is on' : 'Auto-protection is off',
           body: on ? 'Kantoi will warn you about scams, even when the app is closed.' : 'Kantoi will not check anything until you turn it back on.',
-          icon: on ? Icons.verified_user_rounded : Icons.shield_outlined,
+          icon: on ? Icons.verified_user_rounded : Icons.verified_user_outlined,
           color: on ? K.green : K.outline);
     }
   }
@@ -105,7 +105,7 @@ class _ProtectionPageState extends State<ProtectionPage> with WidgetsBindingObse
           option(Icons.back_hand_outlined, 'Pause card', 'Over a chat when a message looks like a scam', 'pause'),
           option(Icons.phone_in_talk_outlined, 'Call warning', 'While a risky number is ringing', 'call'),
           option(Icons.block_rounded, 'Closed website', 'After Kantoi closes a scam page', 'site'),
-          option(Icons.shield_outlined, 'Chat badge', 'The risk of the chat you have open', 'badge'),
+          option(Icons.verified_user_outlined, 'Chat badge', 'The risk of the chat you have open', 'badge'),
         ]),
       ),
     );
@@ -116,7 +116,7 @@ class _ProtectionPageState extends State<ProtectionPage> with WidgetsBindingObse
     final t = Theme.of(context).textTheme;
     final active = _s.enabled ? guards.where((g) => _s.guardOn(g.key)).length : 0;
     return Scaffold(
-      appBar: AppBar(title: const Text('Protection centre')),
+      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Protection centre')),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: PageBody(children: [

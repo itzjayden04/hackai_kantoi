@@ -55,7 +55,7 @@ class LimitsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text("What Kantoi can't do")),
+      appBar: AppBar(automaticallyImplyLeading: false, title: const Text("What Kantoi can't do")),
       body: PageBody(children: [
         Text('Kantoi gives its best judgement, not a guarantee. Here is what it does not check, and how often it is right.',
             style: t.bodyLarge),

@@ -24,7 +24,6 @@ import 'ui/check/result_page.dart';
 import 'ui/check_page.dart';
 import 'ui/emergency_page.dart';
 import 'ui/intel_page.dart';
-import 'ui/kit.dart';
 import 'ui/learn_page.dart';
 import 'ui/protection_page.dart';
 import 'ui/report/report_tab.dart';
@@ -131,7 +130,7 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   static const _tabs = [
-    (Icons.shield_outlined, Icons.shield_rounded, 'Check'),
+    (Icons.verified_user_outlined, Icons.verified_user_rounded, 'Check'),
     (Icons.travel_explore_outlined, Icons.travel_explore_rounded, 'Trace'),
     (Icons.flag_outlined, Icons.flag_rounded, 'Report'),
     (Icons.school_outlined, Icons.school_rounded, 'Learn'),
@@ -192,32 +191,45 @@ class _ShellState extends State<Shell> {
   @override
   Widget build(BuildContext context) {
     final tab = appState.tab.value;
+    // Trace and Emergency have a blue header behind the bar, so the bar goes light.
+    final deep = tab == tabTrace || tab == tabEmergency;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _onBack();
       },
-      child: Scaffold(
+      child: SkyBackground(
+        deep: deep,
+        child: Scaffold(
+        backgroundColor: Colors.transparent,
         extendBody: true,
         appBar: AppBar(
-          leading: tab == 0 ? null : IconButton(tooltip: 'Back', icon: const Icon(Icons.arrow_back_rounded), onPressed: _onBack),
-          titleSpacing: tab == 0 ? 16 : 0,
-          title: const KantoiLogo(),
+          systemOverlayStyle: deep ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+          // No back arrow on the tabs: the tab bar moves between them and the
+          // phone's back gesture still returns to Check.
+          automaticallyImplyLeading: false,
+          titleSpacing: 20,
+          // The wordmark on every tab, white on the blue headers; each page
+          // shows its own big title.
+          toolbarHeight: 64,
+          title: KantoiWordmark(light: deep),
           actions: [
-            const ProtectedPill(),
+            // Plain line icons on every tab: white on the blue headers.
+            ProtectionShield(color: deep ? Colors.white : K.onSurface),
             IconButton(
               tooltip: 'Settings',
-              icon: const Icon(Icons.settings_outlined),
+              color: deep ? Colors.white : K.onSurface,
+              icon: const Icon(Icons.settings_outlined, size: 24),
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => Scaffold(
-                    appBar: AppBar(title: const Text('Settings')),
+                    appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Settings')),
                     body: const SettingsPage(),
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 8),
           ],
         ),
         body: Column(
@@ -250,13 +262,15 @@ class _ShellState extends State<Shell> {
           ],
         ),
         bottomNavigationBar: _GlassNav(index: tab, items: _tabs, onTap: (i) => appState.tab.value = i),
+        ),
       ),
     );
   }
 }
 
-/// Frosted 80px bottom bar: a 64x32 tinted pill marks the open tab, and a
-/// red dot on Report means a report draft is waiting.
+/// Floating frosted capsule above the page, icons only. The open tab
+/// widens into a filled ink pill; Emergency is always red so it can be found
+/// in a hurry, and a red dot on Report means a report draft is waiting.
 class _GlassNav extends StatelessWidget {
   final int index;
   final List<(IconData, IconData, String)> items;
@@ -265,33 +279,53 @@ class _GlassNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.85),
-            boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, -1))],
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            borderRadius: BorderRadius.all(Radius.circular(36)),
+            boxShadow: [
+              BoxShadow(color: Color(0x14111418), blurRadius: 40, spreadRadius: 2, offset: Offset(0, 14)),
+              BoxShadow(color: Color(0x0A111418), blurRadius: 6, offset: Offset(0, 2)),
+            ],
           ),
-          child: SafeArea(
-            top: false,
-            child: SizedBox(
-              height: 72,
-              child: ListenableBuilder(
-                listenable: reportStore,
-                builder: (context, _) => Row(
-                  children: [
-                    for (var i = 0; i < items.length; i++)
-                      Expanded(
-                        child: InkResponse(
+          child: ClipRRect(
+            borderRadius: const BorderRadius.all(Radius.circular(36)),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+              child: Container(
+                height: 64,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                decoration: BoxDecoration(
+                  // Glass: a see-through white wash, brighter along the top
+                  // edge, with a thin light rim.
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.white.withValues(alpha: 0.72), Colors.white.withValues(alpha: 0.45)],
+                  ),
+                  borderRadius: const BorderRadius.all(Radius.circular(36)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.8), width: 1.2),
+                ),
+                child: ListenableBuilder(
+                  listenable: reportStore,
+                  builder: (context, _) => Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      for (var i = 0; i < items.length; i++)
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
                           onTap: () {
                             HapticFeedback.selectionClick();
                             onTap(i);
                           },
                           child: _NavItem(item: items[i], selected: i == index, badge: i == tabReport && reportStore.openDraft != null),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -310,59 +344,62 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The emergency tab is always red so it can be found in a hurry.
     final sos = item.$1 == Icons.sos_outlined;
-    final c = sos ? K.error : selected ? K.primary : K.secondary;
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        AnimatedScale(
-          scale: selected ? 1 : 0.94,
-          duration: K.fast,
-          curve: Curves.easeOutBack,
-          child: AnimatedContainer(
-            duration: K.medium,
-            curve: K.curve,
-            width: 64,
-            height: 32,
-            decoration: BoxDecoration(color: selected ? (sos ? K.errorContainer : K.primaryFixed) : Colors.transparent, borderRadius: BorderRadius.circular(99)),
-            child: Stack(alignment: Alignment.center, children: [
-              Icon(selected ? item.$2 : item.$1, color: c, size: 22),
+    final fill = sos ? K.red : K.navy;
+    final c = selected ? Colors.white : (sos ? K.red : K.secondary);
+    return Semantics(
+      selected: selected,
+      button: true,
+      label: item.$3,
+      child: Tooltip(
+        message: item.$3,
+        child: AnimatedContainer(
+          duration: K.medium,
+          curve: K.curve,
+          width: selected ? 68 : 48,
+          height: 48,
+          decoration: BoxDecoration(
+            gradient: selected
+                ? LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color.lerp(fill, Colors.white, 0.18)!, fill],
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: selected ? [BoxShadow(color: fill.withValues(alpha: 0.35), blurRadius: 18, spreadRadius: 1, offset: const Offset(0, 4))] : null,
+          ),
+          child: Center(
+            child: Stack(clipBehavior: Clip.none, children: [
+              Icon(selected ? item.$2 : item.$1, color: c, size: 24),
               if (badge)
                 Positioned(
-                  top: 6,
-                  right: 18,
+                  top: -1,
+                  right: -3,
                   child: Container(
                     width: 8,
                     height: 8,
-                    decoration: BoxDecoration(color: K.error, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 1.5)),
+                    decoration: BoxDecoration(color: K.red, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 1.5)),
                   ),
                 ),
             ]),
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          item.$3,
-          maxLines: 1,
-          overflow: TextOverflow.fade,
-          softWrap: false,
-          style: TextStyle(fontSize: 12, height: 16 / 12, letterSpacing: 0.24, fontWeight: FontWeight.w600, color: c),
-        ),
-      ],
+      ),
     );
   }
 }
 
-/// "Protected" with a breathing green dot when phone protection is fully
-/// on, "Turn on" in amber otherwise. Tapping opens the Protection centre.
-class ProtectedPill extends StatefulWidget {
-  const ProtectedPill({super.key});
+/// A shield in the top bar: filled when phone protection is fully on, an
+/// outline when it is not. Tapping opens the Protection centre.
+class ProtectionShield extends StatefulWidget {
+  final Color color;
+  const ProtectionShield({super.key, this.color = K.onSurface});
   @override
-  State<ProtectedPill> createState() => _ProtectedPillState();
+  State<ProtectionShield> createState() => _ProtectionShieldState();
 }
 
-class _ProtectedPillState extends State<ProtectedPill> with WidgetsBindingObserver {
+class _ProtectionShieldState extends State<ProtectionShield> with WidgetsBindingObserver {
   GuardStatus? _s;
 
   @override
@@ -392,38 +429,14 @@ class _ProtectedPillState extends State<ProtectedPill> with WidgetsBindingObserv
   Widget build(BuildContext context) {
     if (!guardSupported) return const SizedBox.shrink();
     final on = _s?.ready ?? false;
-    final c = on ? K.green : K.amber;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Material(
-        color: c.withValues(alpha: 0.1),
-        shape: const StadiumBorder(),
-        child: InkWell(
-          customBorder: const StadiumBorder(),
-          onTap: () async {
-            await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProtectionPage()));
-            _refresh();
-          },
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 12, 0),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                on
-                    ? PulseDot(color: c, size: 7)
-                    : Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(Icons.error_outline_rounded, size: 14, color: c),
-                      ),
-                Text(
-                  _s == null ? '...' : (on ? 'Protected' : 'Turn on'),
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return IconButton(
+      tooltip: on ? 'Protected' : 'Protection is off. Tap to turn on',
+      color: widget.color,
+      icon: Icon(on ? Icons.verified_user : Icons.verified_user_outlined, size: 24),
+      onPressed: () async {
+        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProtectionPage()));
+        _refresh();
+      },
     );
   }
 }

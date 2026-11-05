@@ -45,27 +45,47 @@ class _LearnPageState extends State<LearnPage> {
       builder: (context, _) => PageBody(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
         children: [
-          Text('Learn', style: t.headlineMedium),
-          const SizedBox(height: 4),
-          Text('Short lessons and practice with made-up messages. Safe to tap anything.', style: t.bodyMedium?.copyWith(color: K.onSurfaceVariant)),
-          const SizedBox(height: 16),
-          const Reveal(child: _ScoreCard()),
-          const SizedBox(height: 12),
-          const Reveal(index: 1, child: _PracticeCard()),
-          const SizedBox(height: 12),
-          const Reveal(index: 2, child: _CheckupCard()),
-          SectionTitle('Common scams in Malaysia', trailing: Text('${scams.length} types', style: t.labelMedium?.copyWith(color: K.outline))),
-          for (final (i, e) in shown.indexed) Reveal(index: i, child: _ScamCard(e: e)),
-          if (!_all && scams.length > shown.length)
-            TextButton.icon(
-              icon: const Icon(Icons.expand_more_rounded),
-              label: Text('Show all ${scams.length}'),
-              onPressed: () => setState(() => _all = true),
-            ),
-          for (final e in genuine) _ScamCard(e: e),
-          const SectionTitle('Family'),
-          const GuardianStatusTile(),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+          const PageTitle('Learn'),
+          const SizedBox(height: 24),
+          const KSection(
+            'Practice',
+            first: true,
+            info: 'Spot the scam: five made-up messages. Tap the suspicious words, then say Scam or Genuine. '
+                'Your score and level go up as you improve.\n\n'
+                'Safety check-up: quick questions about your bank, phone and accounts, with what to fix.',
+            children: [
+              Reveal(child: _ScoreCard()),
+              Reveal(index: 1, child: _PracticeCard()),
+              Reveal(index: 2, child: _CheckupCard()),
+            ],
+          ),
+          KSection(
+            'Lessons',
+            info: 'How each scam works step by step, a made-up example, the warning signs and what to do.',
+            children: [
+              Reveal(
+                index: 3,
+                child: KGroup(
+                  title: 'Common scams',
+                  badge: '${scams.length}',
+                  badgeColor: K.red,
+                  note: 'Malaysia',
+                  children: [
+                    for (final e in shown) _ScamRow(e: e),
+                    if (scams.length > 5) KGroupMore(open: _all, total: scams.length, onTap: () => setState(() => _all = !_all)),
+                  ],
+                ),
+              ),
+              KGroup(children: [for (final e in genuine) _ScamRow(e: e)]),
+            ],
+          ),
+          const KSection(
+            'Family',
+            info: 'A guardian is someone you trust. When a message is very likely a scam, you can tell them in one tap.',
+            children: [GuardianStatusTile()],
+          ),
+          const SizedBox(height: 32),
           KCard(
             color: K.surfaceLow,
             borderColor: Colors.transparent,
@@ -74,8 +94,7 @@ class _LearnPageState extends State<LearnPage> {
               const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('In doubt? Call NSRC 997', style: t.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                  Text('National Scam Response Centre. $nsrcHours.', style: t.bodySmall),
+                  Text('In doubt? Call NSRC 997', style: t.titleMedium),
                 ]),
               ),
               FilledButton(style: FilledButton.styleFrom(backgroundColor: K.error, minimumSize: const Size(0, 40)), onPressed: () => dial(nsrcNumber), child: const Text('Call')),
@@ -97,32 +116,29 @@ class _ScoreCard extends StatelessWidget {
     final skills = Coach.practised.where((c) => (coach.skills[c]?.seen ?? 0) > 0).toList()
       ..sort((a, b) => coach.skills[b]!.seen.compareTo(coach.skills[a]!.seen));
     return KCard(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          ScoreRing(
-            value: score,
-            label: done == 0 ? '–' : '${(score * 100).round()}',
-            sub: done == 0 ? 'no score' : '/100',
-            color: done == 0 ? K.outline : (score >= 0.7 ? K.green : score >= 0.4 ? K.amber : K.red),
-          ),
-          const SizedBox(width: 16),
+        // Title and small capitals on the left, the score itself big on the right.
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Your practice score', style: t.titleMedium),
               const SizedBox(height: 4),
               Text(
-                  done == 0
-                      ? 'Answer a few practice messages to get your score.'
-                      : '${coach.passed} of $done practice messages spotted correctly.',
-                  style: t.bodySmall),
-              if (done > 0) ...[
+                (done == 0 ? 'No practice yet' : '${coach.passed} of $done spotted · ${drillLevelLabel(coach.level)}').toUpperCase(),
+                style: monoCaps(),
+              ),
+              if (coach.streak > 1) ...[
                 const SizedBox(height: 8),
-                Wrap(spacing: 6, runSpacing: 6, children: [
-                  Pill('Level: ${drillLevelLabel(coach.level)}', color: K.primary),
-                  if (coach.streak > 1) Pill('${coach.streak} in a row', color: K.green, icon: Icons.bolt_rounded),
-                ]),
+                Pill('${coach.streak} in a row', color: K.green, icon: Icons.bolt_rounded),
               ],
             ]),
+          ),
+          BigNumber(
+            done == 0 ? '–' : '${(score * 100).round()}',
+            unit: done == 0 ? null : '/100',
+            size: 44,
+            color: done == 0 ? K.outline : (score >= 0.7 ? K.green : score >= 0.4 ? K.amber : K.red),
           ),
         ]),
         if (skills.isNotEmpty) ...[
@@ -183,45 +199,31 @@ class _PracticeCard extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final review = coach.review.where((c) => c != CueCategory.legitimacy).take(2).map(cueLabel).toList();
     void start() => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DrillPage()));
-    return Material(
-      color: K.primaryContainer,
-      borderRadius: K.r16,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: start,
-        child: Stack(children: [
-          const Positioned(
-            right: -18,
-            bottom: -24,
-            child: Icon(Icons.shield_outlined, size: 140, color: Color(0x14FFFFFF)),
+    // Like the sample's "Invite friends" card: navy glow, a big faint shield,
+    // a light title over small capitals and a full-width white pill.
+    return NavyGlowCard(
+      watermark: Icons.verified_user_outlined,
+      onTap: start,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text('Spot the scam', style: t.headlineSmall?.copyWith(color: Colors.white)),
+        const SizedBox(height: 4),
+        Text(
+          (review.isEmpty ? '${DrillPage.defaultRounds} questions · made-up messages' : 'Next: ${review.join(' and ')}').toUpperCase(),
+          style: monoCaps(color: const Color(0xB3FFFFFF)),
+        ),
+        const SizedBox(height: 20),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: K.navy,
+            minimumSize: const Size(0, 50),
+            textStyle: monoCaps(size: 13).copyWith(fontWeight: FontWeight.w600),
           ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('QUICK PRACTICE · ${DrillPage.defaultRounds} QUESTIONS',
-                  style: t.labelSmall?.copyWith(color: const Color(0xFFB6C4FF), letterSpacing: 1)),
-              const SizedBox(height: 6),
-              Text('Spot the scam', style: t.headlineSmall?.copyWith(color: Colors.white)),
-              const SizedBox(height: 6),
-              Text(
-                coach.done == 0
-                    ? 'Tap the suspicious words in a made-up message, then decide: scam or genuine?'
-                    : review.isNotEmpty
-                        ? 'Next up: more practice on ${review.join(' and ').toLowerCase()}.'
-                        : 'Next up: ${drillLevelLabel(coach.level).toLowerCase()} messages.',
-                style: t.bodyMedium?.copyWith(color: Colors.white.withValues(alpha: 0.88)),
-              ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: K.primary, minimumSize: const Size(0, 48)),
-                icon: const Icon(Icons.play_arrow_rounded),
-                label: Text(coach.done == 0 ? 'Start practice' : 'Continue practice'),
-                onPressed: start,
-              ),
-            ]),
-          ),
-        ]),
-      ),
+          icon: const Icon(Icons.play_arrow_rounded),
+          label: Text((coach.done == 0 ? 'Start practice' : 'Continue practice').toUpperCase()),
+          onPressed: start,
+        ),
+      ]),
     );
   }
 }
@@ -236,7 +238,7 @@ class _CheckupCard extends StatelessWidget {
     final String title, sub;
     if (!checkup.started) {
       title = 'Safety check-up';
-      sub = '$n quick questions to see how well your accounts are protected.';
+      sub = '$n quick questions';
     } else if (!checkup.finished) {
       title = 'Safety check-up: $answered of $n answered';
       sub = 'Carry on where you left off.';
@@ -252,7 +254,7 @@ class _CheckupCard extends StatelessWidget {
         const SizedBox(width: 14),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: t.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+            Text(title, style: t.titleMedium),
             const SizedBox(height: 2),
             Text(sub, style: t.bodySmall),
           ]),
@@ -263,42 +265,14 @@ class _CheckupCard extends StatelessWidget {
   }
 }
 
-class _ScamCard extends StatelessWidget {
+class _ScamRow extends StatelessWidget {
   final Explainer e;
-  const _ScamCard({required this.e});
+  const _ScamRow({required this.e});
   @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final c = e.genuine ? K.green : K.red;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: KCard(
+  Widget build(BuildContext context) => KGroupRow(
+        icon: explainerIcon(e.id),
+        color: e.genuine ? K.green : K.red,
+        label: e.genuine ? 'How to tell a genuine message' : e.name,
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ScamStoryPage(e: e))),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Row(children: [
-            IconBadge(explainerIcon(e.id), color: c),
-            const SizedBox(width: 12),
-            Expanded(child: Text(e.genuine ? 'How to tell a genuine message' : e.name, style: t.titleMedium)),
-          ]),
-          const SizedBox(height: 8),
-          Text(e.summary, maxLines: 3, overflow: TextOverflow.ellipsis, style: t.bodySmall?.copyWith(color: K.onSurfaceVariant)),
-          const SizedBox(height: 10),
-          Row(children: [
-            Expanded(
-              child: Wrap(spacing: 6, runSpacing: 6, children: [
-                for (final tag in cueTags(e))
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: K.surfaceLow, borderRadius: BorderRadius.circular(6)),
-                    child: Text(tag, style: t.labelSmall?.copyWith(color: K.onSurfaceVariant)),
-                  ),
-              ]),
-            ),
-            Text('How it works', style: t.labelMedium?.copyWith(color: K.primary)),
-            const Icon(Icons.chevron_right_rounded, size: 18, color: K.primary),
-          ]),
-        ]),
-      ),
-    );
-  }
+      );
 }

@@ -7,12 +7,6 @@ import '../../state.dart';
 import '../kit.dart';
 import '../theme.dart';
 
-Color coverageColor(Coverage c) => switch (c) {
-      Coverage.full => K.green,
-      Coverage.preview || Coverage.email => K.amber,
-      Coverage.sender => K.outline,
-    };
-
 Color levelColor(String level) => switch (level) {
       'danger' => K.red,
       'suspicious' => K.orange,
@@ -158,110 +152,115 @@ class _MonitorPageState extends State<MonitorPage> {
     final s = _s;
     final live = guardSupported && _g.has('notifications');
     return Scaffold(
-      appBar: AppBar(title: const Text('Scam Monitor')),
+      appBar: AppBar(automaticallyImplyLeading: false, ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: PageBody(children: [
           Row(children: [
-            Expanded(child: Text('Scam Monitor', style: t.headlineMedium)),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(color: live ? K.surfaceMid : K.errorContainer, borderRadius: BorderRadius.circular(99)),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                live ? const PulseDot(color: K.primary, size: 7) : const Icon(Icons.pause_circle_outline_rounded, size: 14, color: K.error),
-                const SizedBox(width: 6),
-                Text(live ? 'Active' : 'Off', style: t.labelMedium?.copyWith(color: live ? K.primary : K.error)),
-              ]),
+            const Expanded(
+              child: PageTitle('Scam Monitor'),
             ),
+            Column(mainAxisSize: MainAxisSize.min, children: [
+              // While the monitor cannot read alerts, a bell above "Off"
+              // opens the Android setting that turns it on.
+              if (guardSupported && !live) ...[
+                IconButton(
+                  tooltip: 'Allow reading new messages',
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.white.withValues(alpha: 0.85),
+                    foregroundColor: K.error,
+                    side: const BorderSide(color: K.glassEdge),
+                  ),
+                  icon: const Icon(Icons.notifications_active_outlined, size: 22),
+                  onPressed: () => openGuardSetting('notifications'),
+                ),
+                const SizedBox(height: 4),
+              ],
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(color: live ? K.surfaceMid : K.errorContainer, borderRadius: BorderRadius.circular(99)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  live ? const PulseDot(color: K.primary, size: 7) : const Icon(Icons.pause_circle_outline_rounded, size: 14, color: K.error),
+                  const SizedBox(width: 6),
+                  Text(live ? 'Active' : 'Off', style: t.labelMedium?.copyWith(color: live ? K.primary : K.error)),
+                ]),
+              ),
+            ]),
           ]),
-          const SizedBox(height: 6),
-          Text('Kantoi reads new message alerts on this phone and warns you about scams. Nothing is uploaded.',
-              style: t.bodyMedium?.copyWith(color: K.secondary)),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
           if (!guardSupported)
             const KCard(child: Text('The Scam Monitor works on Android phones.'))
           else if (s == null)
             const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
           else ...[
-            if (!_g.has('notifications'))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: KCard(
-                  color: K.tertiaryFixed.withValues(alpha: 0.6),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Text('Turn on "Read new messages" so the monitor can work.', style: t.bodyMedium),
-                    const SizedBox(height: 8),
-                    FilledButton(onPressed: () => openGuardSetting('notifications'), child: const Text('Turn on')),
-                  ]),
-                ),
-              ),
-            Reveal(
-              child: KCard(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  _Summary(s: s, caughtWeek: s.lastDays(7).fold(0, (a, d) => a + d.$3)),
-                  const SizedBox(height: 20),
-                  _WeekChart(days: s.lastDays(7)),
+            KSection(
+              'This week',
+              first: true,
+              info: 'Messages Kantoi checked each day, with the ones it warned you about in red. Pull down to refresh.',
+              children: [
+                Reveal(child: KCard(padding: const EdgeInsets.fromLTRB(20, 18, 20, 16), child: _WeekChart(days: s.lastDays(7)))),
+                Reveal(index: 1, child: _Summary(s: s, week: s.lastDays(7))),
+              ],
+            ),
+            KSection(
+              'Apps',
+              info: 'Tap an app to see its warnings and how much of its alerts Kantoi can read. Switch one off to stop watching it.',
+              trailing: Text('${s.watching} of ${s.installed.length} watched', style: t.labelMedium?.copyWith(color: K.secondary)),
+              children: [
+                KGroup(children: [
+                  for (final a in s.installed)
+                    _AppRow(a: a, today: s.today, onToggle: (v) async {
+                      await setAppMonitored(a.pkg, v);
+                      _load();
+                    }, onOpen: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MonitorAppPage(app: a, status: _g)))),
+                  if (s.installed.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Text('None of the supported apps is installed.')),
+                  _notInstalled(t, s),
                 ]),
-              ),
+              ],
             ),
-            const SizedBox(height: 12),
-            KCard(
-              padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
-              child: Row(children: [
-                const TintIcon(Icons.notifications_off_outlined, background: K.surfaceMid, size: 38, square: true),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Hide scam notifications', style: t.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                    Text('When a message is very likely a scam, Kantoi removes its alert and shows its own warning instead.',
-                        style: t.bodySmall?.copyWith(color: K.secondary)),
+            KSection(
+              'Settings',
+              info: 'Hide scam notifications: when a message is very likely a scam, Kantoi removes its alert and shows its own warning instead.',
+              children: [
+                KCard(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+                  child: Row(children: [
+                    const TintIcon(Icons.notifications_off_outlined, background: K.surfaceMid, size: 38),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text('Hide scam notifications', style: t.titleMedium)),
+                    Switch(
+                      value: s.hideScams,
+                      onChanged: (v) async {
+                        await setHideScams(v);
+                        _load();
+                      },
+                    ),
                   ]),
                 ),
-                Switch(
-                  value: s.hideScams,
-                  onChanged: (v) async {
-                    await setHideScams(v);
-                    _load();
-                  },
-                ),
-              ]),
+              ],
             ),
-            const SizedBox(height: 20),
-            Row(children: [
-              Expanded(child: Text('Installed apps', style: t.titleMedium)),
-              Text('${s.watching} of ${s.installed.length} watched', style: t.labelMedium?.copyWith(color: K.secondary)),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  /// The last row of the apps list: the supported apps that are not on this
+  /// phone, folded away until asked for.
+  Widget _notInstalled(TextTheme t, MonitorSnapshot s) => Column(children: [
+        InkWell(
+          onTap: () => setState(() => _showAll = !_showAll),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Row(children: [
+              const Icon(Icons.apps_rounded, color: K.secondary, size: 20),
+              const SizedBox(width: 12),
+              Expanded(child: Text('${s.notInstalled.length} more supported apps', style: t.bodyMedium?.copyWith(color: K.secondary))),
+              AnimatedRotation(turns: _showAll ? 0.5 : 0, duration: K.fast, child: const Icon(Icons.expand_more_rounded, color: K.secondary)),
             ]),
-            const SizedBox(height: 10),
-            KCard(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Column(children: [
-                for (final (i, a) in s.installed.indexed) ...[
-                  if (i > 0) const Divider(indent: 72, endIndent: 16),
-                  _AppRow(a: a, today: s.today, onToggle: (v) async {
-                    await setAppMonitored(a.pkg, v);
-                    _load();
-                  }, onOpen: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MonitorAppPage(app: a, status: _g)))),
-                ],
-                if (s.installed.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Text('None of the supported apps is installed.')),
-              ]),
-            ),
-            const SizedBox(height: 12),
-            KCard(
-              padding: EdgeInsets.zero,
-              child: Column(children: [
-                InkWell(
-                  onTap: () => setState(() => _showAll = !_showAll),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(children: [
-                      const Icon(Icons.apps_rounded, color: K.secondary),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text('Not installed (${s.notInstalled.length} more supported apps)', style: t.bodyMedium)),
-                      AnimatedRotation(turns: _showAll ? 0.5 : 0, duration: K.fast, child: const Icon(Icons.expand_more_rounded, color: K.secondary)),
-                    ]),
-                  ),
-                ),
-                AnimatedSize(
+          ),
+        ),
+        AnimatedSize(
                   duration: K.medium,
                   curve: K.curve,
                   alignment: Alignment.topCenter,
@@ -283,138 +282,118 @@ class _MonitorPageState extends State<MonitorPage> {
                           ]),
                         ),
                 ),
-              ]),
-            ),
-            const SizedBox(height: 12),
-            KCard(
-              color: K.surfaceLow,
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const TintIcon(Icons.info_outline_rounded, background: K.surfaceMid, size: 36),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Notification privacy note', style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 4),
-                    Text(
-                        'Some apps hide message text in their alerts. Kantoi can only check what the alert shows. '
-                        'Android 15 and later also hide one-time codes from apps like Kantoi.',
-                        style: t.bodySmall?.copyWith(color: K.onSurfaceVariant)),
-                  ]),
-                ),
-              ]),
-            ),
-          ],
-        ]),
-      ),
-    );
-  }
+      ]);
 }
 
+/// The week in four figures, two to a row.
 class _Summary extends StatelessWidget {
   final MonitorSnapshot s;
-  final int caughtWeek;
-  const _Summary({required this.s, required this.caughtWeek});
+  final List<(String, int, int)> week;
+  const _Summary({required this.s, required this.week});
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    Widget tile(String label, String n, String unit, Color c, {IconData? icon}) => Expanded(
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(12, 10, 8, 12),
-            decoration: const BoxDecoration(color: K.surfaceLow, borderRadius: K.r12),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.labelMedium?.copyWith(color: K.secondary)),
-              const SizedBox(height: 4),
-              Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text(n, style: t.headlineSmall?.copyWith(color: c, fontWeight: FontWeight.w700, fontFeatures: const [FontFeature.tabularFigures()])),
-                const SizedBox(width: 4),
-                if (icon != null)
-                  Padding(padding: const EdgeInsets.only(bottom: 5), child: Icon(icon, size: 16, color: c))
-                else
-                  Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(unit, style: t.labelMedium?.copyWith(color: K.secondary))),
-              ]),
-            ]),
-          ),
-        );
-    return Row(children: [
-      tile('Apps watched', '${s.watching}', 'apps', K.primary),
-      const SizedBox(width: 8),
-      tile('Alerts today', '${s.alertsToday}', '', s.alertsToday > 0 ? K.error : K.primary, icon: s.alertsToday > 0 ? Icons.warning_amber_rounded : null),
-      const SizedBox(width: 8),
-      tile('Caught', '$caughtWeek', 'this wk', caughtWeek > 0 ? K.error : K.primary),
+    final checked = week.fold(0, (a, d) => a + d.$2 + d.$3);
+    final caught = week.fold(0, (a, d) => a + d.$3);
+    return StatGrid([
+      StatTile(
+        label: 'Watching',
+        value: '${s.watching}',
+        caption: '${s.watching} of ${s.installed.length} apps',
+        icon: Icons.apps_rounded,
+      ),
+      StatTile(
+        label: 'Alerts',
+        value: '${s.alertsToday}',
+        caption: 'Today',
+        icon: Icons.notifications_none_rounded,
+        valueColor: s.alertsToday > 0 ? K.error : K.onSurface,
+      ),
+      StatTile(label: 'Checked', value: '$checked', caption: 'Last 7 days', icon: Icons.mark_email_read_outlined),
+      StatTile(
+        label: 'Caught',
+        value: '$caught',
+        caption: 'Last 7 days',
+        icon: Icons.gpp_maybe_outlined,
+        valueColor: caught > 0 ? K.error : K.onSurface,
+      ),
     ]);
   }
 }
 
-/// Seven bars of messages checked, with the warning share in red on top.
+/// Seven days drawn as clusters of thin lines: grey for messages checked,
+/// red for the ones Kantoi warned about, navy for today.
 class _WeekChart extends StatelessWidget {
   final List<(String, int, int)> days;
   const _WeekChart({required this.days});
+
+  static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  String _short(String key) {
+    final d = DateTime.parse(key);
+    return '${d.day} ${_months[d.month - 1]}';
+  }
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final max = days.fold<int>(1, (m, d) => d.$2 + d.$3 > m ? d.$2 + d.$3 : m);
-    const names = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    final total = days.fold(0, (a, d) => a + d.$2 + d.$3);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Row(children: [
-        Expanded(child: Text('LAST 7 DAYS', style: t.labelMedium?.copyWith(color: K.secondary, letterSpacing: 0.8))),
-        _legend(K.primaryContainer, 'Checked'),
-        const SizedBox(width: 12),
-        _legend(K.error, 'Warned'),
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Overview', style: t.headlineSmall),
+            const SizedBox(height: 4),
+            Text('${_short(days.first.$1)} – ${_short(days.last.$1)}'.toUpperCase(), style: monoCaps()),
+          ]),
+        ),
+        BigNumber('$total', unit: ' checked', size: 26),
       ]),
-      const SizedBox(height: 12),
+      const SizedBox(height: 18),
       SizedBox(
-        height: 130,
+        height: 110,
         child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
           for (final (i, d) in days.indexed)
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 7),
-                child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
-                  if (i == days.length - 1) Text('Today', style: t.labelSmall?.copyWith(color: K.primary)),
-                  const SizedBox(height: 2),
-                  Tooltip(
-                    message: '${d.$2 + d.$3} checked, ${d.$3} warned',
-                    child: TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0, end: 1),
-                      duration: Duration(milliseconds: 400 + i * 60),
-                      curve: K.curve,
-                      builder: (_, f, _) {
-                        final h = 84 * f * (d.$2 + d.$3) / max;
-                        final red = d.$2 + d.$3 == 0 ? 0.0 : h * d.$3 / (d.$2 + d.$3);
-                        return Column(children: [
-                          if (red > 0)
-                            Container(
-                                height: red,
-                                decoration: const BoxDecoration(color: K.error, borderRadius: BorderRadius.vertical(top: Radius.circular(3)))),
-                          Container(
-                            height: (h - red).clamp(3, 84),
-                            decoration: BoxDecoration(
-                              color: d.$2 == 0 && red == 0 ? K.surfaceHigh : K.primaryContainer,
-                              borderRadius: BorderRadius.vertical(top: Radius.circular(red > 0 ? 0 : 3)),
-                            ),
-                          ),
-                        ]);
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(names[DateTime.parse(d.$1).weekday - 1],
-                      style: t.labelSmall?.copyWith(color: i == days.length - 1 ? K.primary : K.secondary, fontWeight: FontWeight.w700)),
-                ]),
+              child: Tooltip(
+                message: '${d.$2 + d.$3} checked, ${d.$3} warned',
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: Duration(milliseconds: 400 + i * 60),
+                  curve: K.curve,
+                  builder: (_, f, _) {
+                    final h = (100 * f * (d.$2 + d.$3) / max).clamp(6.0, 100.0);
+                    final red = d.$2 + d.$3 == 0 ? 0.0 : h * d.$3 / (d.$2 + d.$3);
+                    final today = i == days.length - 1;
+                    final base = today ? K.navy : (d.$2 + d.$3 == 0 ? K.surfaceHigh : const Color(0xFFC7CDD6));
+                    return Row(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      for (var k = 0; k < 5; k++) ...[
+                        if (k > 0) const SizedBox(width: 2.5),
+                        Column(mainAxisSize: MainAxisSize.min, children: [
+                          if (red > 0) Container(width: 1.6, height: red, color: K.error),
+                          Container(width: 1.6, height: h - red, color: base),
+                        ]),
+                      ],
+                    ]);
+                  },
+                ),
               ),
             ),
         ]),
       ),
+      const SizedBox(height: 10),
+      Row(children: [
+        Text(_short(days.first.$1).toUpperCase(), style: monoCaps()),
+        const Spacer(),
+        Container(width: 6, height: 6, decoration: const BoxDecoration(color: K.error, shape: BoxShape.circle)),
+        const SizedBox(width: 4),
+        Text('WARNED', style: monoCaps()),
+        const Spacer(),
+        Text('TODAY', style: monoCaps(color: K.navy)),
+      ]),
     ]);
   }
-
-  Widget _legend(Color c, String s) => Row(children: [
-        Container(width: 8, height: 8, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-        const SizedBox(width: 4),
-        Text(s, style: const TextStyle(fontSize: 11, color: K.secondary)),
-      ]);
 }
 
 class _AppRow extends StatelessWidget {
@@ -428,7 +407,6 @@ class _AppRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final n = a.alertsOn(today);
-    final c = coverageColor(a.coverage);
     return InkWell(
       onTap: onOpen,
       child: Padding(
@@ -438,15 +416,7 @@ class _AppRow extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Flexible(child: Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.titleMedium)),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(color: c.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(99)),
-                  child: Text(coverageLabel(a.coverage), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: c)),
-                ),
-              ]),
+              Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.titleMedium),
               const SizedBox(height: 2),
               Text(
                 !a.on ? 'Paused' : (n > 0 ? '$n alert${n == 1 ? '' : 's'} today' : 'No alerts today'),
@@ -481,9 +451,8 @@ class _MonitorAppPageState extends State<MonitorAppPage> {
     final all = alertsFor(widget.status, a.pkg);
     final shown = all.where((x) => _filter == 'all' || x.level == _filter).toList();
     int count(String l) => l == 'all' ? all.length : all.where((x) => x.level == l).length;
-    final c = coverageColor(a.coverage);
     return Scaffold(
-      appBar: AppBar(title: const Text('Check detail')),
+      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Check detail')),
       body: PageBody(children: [
         KCard(
           padding: EdgeInsets.zero,
@@ -496,12 +465,6 @@ class _MonitorAppPageState extends State<MonitorAppPage> {
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(a.name, style: t.titleLarge),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(color: c.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(99)),
-                      child: Text(coverageLabel(a.coverage), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c)),
-                    ),
                   ]),
                 ),
                 Column(children: [

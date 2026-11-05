@@ -198,7 +198,7 @@ class _WarningImagePageState extends State<WarningImagePage> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Warning picture')),
+      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Warning picture')),
       body: ListView(padding: const EdgeInsets.fromLTRB(20, 16, 20, 40), children: [
         Text('Share this with your family group. It does not include the message or any personal details.', style: t.bodyMedium),
         const SizedBox(height: 16),

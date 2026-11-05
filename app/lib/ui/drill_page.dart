@@ -109,7 +109,7 @@ class _DrillPageState extends State<DrillPage> {
   Widget build(BuildContext context) {
     final d = _drill;
     return Scaffold(
-      appBar: AppBar(title: const Text('Practice')),
+      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Practice')),
       body: d == null
           ? const Center(child: CircularProgressIndicator())
           : AnimatedSwitcher(

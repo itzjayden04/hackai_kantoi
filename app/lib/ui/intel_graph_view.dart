@@ -35,7 +35,7 @@ class IntelGraphPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(title)),
+        appBar: AppBar(automaticallyImplyLeading: false, title: Text(title)),
         body: SafeArea(child: IntelGraphView(graph: graph)),
       );
 }

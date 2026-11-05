@@ -18,7 +18,7 @@ class CaseStep {
 }
 
 const caseSteps = [
-  CaseStep('call997', 'Call 997 (National Scam Response Centre)', 'Every minute counts. NSRC works with the banks to trace and hold the money.',
+  CaseStep('call997', 'Call 997 (NSRC)', 'Every minute counts. NSRC (the National Scam Response Centre) works with the banks to trace and hold the money.',
       'Called 997', '997 not called yet'),
   CaseStep('callBank', 'Call your bank and freeze your accounts', 'Use your bank\'s fraud line below or the number on the back of your card. Ask them to block your cards and online banking.',
       'Called bank', 'Bank not called yet'),

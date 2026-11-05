@@ -16,7 +16,7 @@ void main() {
       await t.pumpWidget(const KantoiApp());
       await t.pump(const Duration(milliseconds: 500));
     });
-    expect(find.text('Report'), findsOneWidget, reason: 'five tabs');
+    expect(find.byTooltip('Report'), findsOneWidget, reason: 'five tabs');
     appState.tab.value = tabReport;
     await t.pumpAndSettle();
     expect(find.text('Report a scam'), findsOneWidget);

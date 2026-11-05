@@ -249,13 +249,9 @@ class _CheckPageState extends State<CheckPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('Is this a scam?', style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Check a message, link, email, screenshot or file. Kantoi tells you what to do.',
-                      style: t.bodyMedium?.copyWith(color: K.onSurfaceVariant),
-                    ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
+                    const PageTitle('Is this a scam?'),
+                    const SizedBox(height: 24),
                     AnimatedSize(
                       duration: K.medium,
                       curve: K.curve,
@@ -285,7 +281,7 @@ class _CheckPageState extends State<CheckPage> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 32),
                     AnimatedSwitcher(
                       duration: K.medium,
                       switchInCurve: K.curve,
@@ -355,20 +351,26 @@ class _CheckPageState extends State<CheckPage> {
   Widget _intakeCard(TextTheme t) {
     Widget iconBtn(IconData icon, String tip, VoidCallback onTap) => Padding(
       padding: const EdgeInsets.only(left: 6),
-      child: IconButton.filledTonal(
+      child: IconButton(
         tooltip: tip,
-        style: IconButton.styleFrom(backgroundColor: K.surfaceLow, foregroundColor: K.onSurfaceVariant),
+        style: IconButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: K.onSurface,
+          side: BorderSide(color: K.outlineVariant.withValues(alpha: 0.7)),
+          fixedSize: const Size(44, 44),
+        ),
         icon: Icon(icon, size: 20),
         onPressed: onTap,
       ),
     );
     return Container(
       key: const ValueKey('intake'),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: K.r16,
-        boxShadow: const [BoxShadow(color: Color(0x140B1C30), blurRadius: 16, offset: Offset(0, 4))],
+        color: K.glass,
+        borderRadius: const BorderRadius.all(Radius.circular(26)),
+        border: Border.all(color: K.glassEdge),
+        boxShadow: K.shadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -376,18 +378,11 @@ class _CheckPageState extends State<CheckPage> {
           Row(
             children: [
               Expanded(
-                child: Text('Scam check', style: t.labelLarge?.copyWith(color: K.onSurfaceVariant)),
+                child: Text('Scam check', style: t.titleMedium),
               ),
               const Icon(Icons.lock_outline_rounded, size: 14, color: K.outline),
               const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  'Personal details hidden',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: t.labelSmall?.copyWith(color: K.outline),
-                ),
-              ),
+              Text('Private', style: t.labelSmall?.copyWith(color: K.outline)),
             ],
           ),
           const SizedBox(height: 10),
@@ -400,11 +395,11 @@ class _CheckPageState extends State<CheckPage> {
               hintText: 'Paste a message, link, email, bank account or phone number...',
               filled: true,
               fillColor: K.surfaceLow,
-              border: const OutlineInputBorder(borderRadius: K.r8, borderSide: BorderSide.none),
-              enabledBorder: const OutlineInputBorder(borderRadius: K.r8, borderSide: BorderSide.none),
+              border: const OutlineInputBorder(borderRadius: K.r16, borderSide: BorderSide.none),
+              enabledBorder: const OutlineInputBorder(borderRadius: K.r16, borderSide: BorderSide.none),
               focusedBorder: const OutlineInputBorder(
-                borderRadius: K.r8,
-                borderSide: BorderSide(color: K.primary, width: 1.5),
+                borderRadius: K.r16,
+                borderSide: BorderSide(color: K.onSurface, width: 1.2),
               ),
               suffixIcon: _text.text.isEmpty
                   ? null
@@ -420,12 +415,12 @@ class _CheckPageState extends State<CheckPage> {
                   alignment: Alignment.centerLeft,
                   child: FilledButton.tonalIcon(
                     style: FilledButton.styleFrom(
-                      minimumSize: const Size(0, 40),
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      backgroundColor: K.surfaceHigh,
-                      foregroundColor: K.primary,
-                      textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600),
-                      shape: const StadiumBorder(),
+                      minimumSize: const Size(0, 44),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      backgroundColor: Colors.white,
+                      foregroundColor: K.onSurface,
+                      textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w500),
+                      shape: StadiumBorder(side: BorderSide(color: K.outlineVariant.withValues(alpha: 0.7))),
                     ),
                     onPressed: _pasteAndCheck,
                     icon: const Icon(Icons.content_paste_rounded, size: 18),
@@ -441,12 +436,6 @@ class _CheckPageState extends State<CheckPage> {
           ),
           const SizedBox(height: 14),
           FilledButton.icon(onPressed: () => _run(_text.text), icon: const Icon(Icons.policy_outlined), label: const Text('Check with Kantoi AI')),
-          const SizedBox(height: 10),
-          Text(
-            'Also reads screenshots, PDFs, Word files, voice notes, app files (APK) and WhatsApp chat exports.',
-            style: t.bodySmall?.copyWith(color: K.outline),
-            textAlign: TextAlign.center,
-          ),
         ],
       ),
     );
@@ -482,39 +471,51 @@ class _CheckPageState extends State<CheckPage> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Reveal(index: 0, child: ProtectionStatusCard()),
-          const SizedBox(height: 12),
-          if (guardSupported) ...[const Reveal(index: 1, child: MonitorCard()), const SizedBox(height: 12)],
-          Reveal(
-            index: 1,
-            child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: WayInTile(
-                      icon: Icons.people_outline_rounded,
-                      title: 'Check a person or chat',
-                      subtitle: 'Love, job or investment chats',
-                      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RelationshipScreen())),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: WayInTile(
-                      icon: Icons.emergency_outlined,
-                      color: K.red,
-                      title: 'Already paid?',
-                      subtitle: 'Get help right now',
-                      onTap: () => appState.tab.value = tabEmergency,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          KSection(
+            'Protection',
+            first: true,
+            info: 'Auto-Protection watches new messages and warns you when one looks like a scam. '
+                "Scam Monitor shows which apps are being watched and today's warnings.",
+            children: [
+              const Reveal(index: 0, child: ProtectionStatusCard()),
+              if (guardSupported) const Reveal(index: 1, child: MonitorCard()),
+            ],
           ),
-          if (history.isNotEmpty) ...[
-            SectionTitle(
+          KSection(
+            'More checks',
+            info: 'Check a person: see if someone you met online shows the signs of a love, job or investment scam.\n\n'
+                'Already paid: the steps to take right now if you sent money or shared a code.',
+            children: [
+              Reveal(
+                index: 2,
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: WayInTile(
+                          icon: Icons.people_outline_rounded,
+                          title: 'Check a person',
+                          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RelationshipScreen())),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: WayInTile(
+                          icon: Icons.emergency_outlined,
+                          color: K.red,
+                          title: 'Already paid?',
+                          onTap: () => appState.tab.value = tabEmergency,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (history.isNotEmpty)
+            KSection(
               'Recent checks',
               trailing: history.length > 3
                   ? TextButton(
@@ -522,61 +523,51 @@ class _CheckPageState extends State<CheckPage> {
                       child: const Text('See all'),
                     )
                   : null,
+              children: [
+                Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: datedChecks(history.take(3).toList(), revealFrom: 3)),
+              ],
             ),
-            for (final (i, h) in history.take(3).indexed)
-              Reveal(
-                index: i + 2,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: RecentCheckCard(inv: h),
-                ),
-              ),
-          ],
-          const SizedBox(height: 14),
-          Reveal(index: 5, child: _samples(t)),
+          KSection(
+            'Try a sample',
+            info: 'Made-up messages, safe to tap. They show how Kantoi judges a scam, and a genuine bank message too.',
+            children: [Reveal(index: 6, child: _samples(t))],
+          ),
         ],
       );
     },
   );
 
-  Widget _samples(TextTheme t) => KCard(
-    color: K.surfaceLow,
-    borderColor: Colors.transparent,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.tips_and_updates_outlined, color: K.primary, size: 20),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text('Not sure what to check? Try a sample', style: t.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-            ),
-          ],
+  /// The samples as an even two-column grid of pill buttons.
+  Widget _samples(TextTheme t) {
+    Widget chip((String, IconData, String) s) => Expanded(
+      child: OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 46),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          alignment: Alignment.centerLeft,
+          textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w500),
         ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final (label, icon, text) in samples)
-              ActionChip(
-                avatar: Icon(icon, size: 18, color: K.primary),
-                backgroundColor: Colors.white,
-                side: BorderSide.none,
-                label: Text(label),
-                onPressed: () {
-                  _text.text = text;
-                  _run(text);
-                },
-              ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Text('Made-up examples for practice.', style: t.labelSmall?.copyWith(color: K.outline)),
-      ],
-    ),
-  );
+        icon: Icon(s.$2, size: 18, color: K.onSurface),
+        label: Text(s.$1, maxLines: 1, overflow: TextOverflow.ellipsis),
+        onPressed: () {
+          _text.text = s.$3;
+          _run(s.$3);
+        },
+      ),
+    );
+    return KCard(
+      child: Column(children: [
+        for (var i = 0; i < samples.length; i += 2) ...[
+          if (i > 0) const SizedBox(height: 10),
+          Row(children: [
+            chip(samples[i]),
+            const SizedBox(width: 10),
+            if (i + 1 < samples.length) chip(samples[i + 1]) else const Spacer(),
+          ]),
+        ],
+      ]),
+    );
+  }
 }
 
 /// Practice messages: a parcel scam and a genuine bank TAC first, so the

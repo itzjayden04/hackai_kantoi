@@ -462,7 +462,7 @@ class _LoginState extends State<_Login> {
     final t = Theme.of(context).textTheme;
     return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 24), children: [
       const _TopBar('Sign in'),
-      const _Hero(icon: Icons.shield_outlined, title: 'Welcome back', subtitle: 'Log in to keep Kantoi protecting you.'),
+      const _Hero(icon: Icons.verified_user_outlined, title: 'Welcome back', subtitle: 'Log in to keep Kantoi protecting you.'),
       KCard(
         padding: const EdgeInsets.all(18),
         child: AutofillGroup(
@@ -941,7 +941,7 @@ class _CodeState extends State<_Code> {
       KCard(
         color: K.surfaceLow,
         child: Row(children: [
-          TintIcon(Icons.shield_outlined, color: K.onTertiaryContainer, size: 32),
+          TintIcon(Icons.verified_user_outlined, color: K.onTertiaryContainer, size: 32),
           const SizedBox(width: 12),
           Expanded(child: Text('Check your spam folder. Kantoi will never ask you for this code by phone or chat.', style: t.bodyMedium?.copyWith(color: K.secondary))),
         ]),

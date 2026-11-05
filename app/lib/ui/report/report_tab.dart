@@ -175,15 +175,12 @@ class _ReportTabState extends State<ReportTab> {
     final draft = mine.where((r) => r.status == ReportStatus.draft).firstOrNull;
     final shown = _allReports ? mine : mine.take(3).toList();
     return PageBody(padding: const EdgeInsets.fromLTRB(16, 8, 16, 110), children: [
-      const Align(alignment: Alignment.centerLeft, child: Pill('Community reports', color: K.secondary, icon: Icons.shield_outlined)),
-      const SizedBox(height: 10),
-      Text('Report a scam', style: t.headlineMedium),
-      const SizedBox(height: 4),
-      Text('Help stop scammers and protect others. Takes about 2 minutes.', style: t.bodyMedium?.copyWith(color: K.secondary)),
-      const SizedBox(height: 20),
+      const SizedBox(height: 8),
+      const PageTitle('Report a scam'),
+      const SizedBox(height: 24),
       if (last != null) Reveal(child: _FromLastCheck(inv: last, onReport: () => _start(ScamReport.fromCheck(last, id: _newId()), inv: last))),
       if (draft != null) ...[
-        const SizedBox(height: 12),
+        if (last != null) const SizedBox(height: 12),
         KCard(
           color: K.surfaceLow,
           onTap: () => _start(draft),
@@ -200,55 +197,33 @@ class _ReportTabState extends State<ReportTab> {
           ]),
         ),
       ],
-      const SizedBox(height: 24),
-      Row(children: [
-        Expanded(child: Text(last == null ? 'What happened?' : 'Or choose what happened', style: t.titleMedium)),
-        Text('Pick a category', style: t.labelMedium?.copyWith(color: K.secondary)),
-      ]),
-      const SizedBox(height: 12),
-      for (final (i, g) in ScamGroup.values.indexed) ...[
-        Reveal(
-          index: i + 1,
-          child: KCard(
-            padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
-            onTap: () => setState(() {
-              _group = g;
-              _r = ScamReport(id: _newId());
-              _inv = null;
-              _view = _View.type;
-            }),
-            child: Row(children: [
-              TintIcon(groupIcon(g), color: K.primaryContainer, background: K.surfaceMid, size: 44),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(groupLabel(g), style: t.titleMedium),
-                  const SizedBox(height: 2),
-                  Text(groupExample(g), style: t.bodySmall?.copyWith(color: K.secondary), maxLines: 1, overflow: TextOverflow.ellipsis),
-                ]),
-              ),
-              const Icon(Icons.chevron_right_rounded, color: K.outline),
+      KSection(
+        last == null ? 'What happened?' : 'Or choose what happened',
+        first: last == null && draft == null,
+        info: 'Pick the closest match. The next screen narrows it down to the exact scam type, then four short steps prepare your report.',
+        children: [
+          Reveal(
+            index: 1,
+            child: KGroup(children: [
+              for (final g in ScamGroup.values)
+                KGroupRow(
+                  icon: groupIcon(g),
+                  label: groupLabel(g),
+                  onTap: () => setState(() {
+                    _group = g;
+                    _r = ScamReport(id: _newId());
+                    _inv = null;
+                    _view = _View.type;
+                  }),
+                ),
             ]),
           ),
-        ),
-        const SizedBox(height: 10),
-      ],
-      if (mine.isNotEmpty) ...[
-        const SizedBox(height: 14),
-        Row(children: [
-          Expanded(child: Text('My reports', style: t.titleMedium)),
-          if (mine.length > 3)
-            TextButton(
-              onPressed: () => setState(() => _allReports = !_allReports),
-              child: Text(_allReports ? 'Show less' : 'View all (${mine.length})'),
-            ),
-        ]),
-        const SizedBox(height: 6),
-        KCard(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Column(children: [
-            for (final (i, r) in shown.indexed) ...[
-              if (i > 0) const Divider(indent: 16, endIndent: 16),
+        ],
+      ),
+      if (mine.isNotEmpty)
+        KSection('My reports', children: [
+          KGroup(children: [
+            for (final r in shown)
               _MyReportRow(
                 r: r,
                 onTap: () => setState(() {
@@ -258,29 +233,19 @@ class _ReportTabState extends State<ReportTab> {
                   _step = 0;
                 }),
               ),
-            ],
+            if (mine.length > 3) KGroupMore(open: _allReports, total: mine.length, onTap: () => setState(() => _allReports = !_allReports)),
           ]),
-        ),
-      ],
-      const SizedBox(height: 20),
+        ]),
+      const SizedBox(height: 32),
       KCard(
         color: K.errorContainer,
         borderColor: K.error.withValues(alpha: 0.4),
         onTap: () => dial(nsrcNumber),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Row(children: [
           const TintIcon(Icons.phone_in_talk_rounded, color: Colors.white, background: K.error),
           const SizedBox(width: 14),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Just lost money?', style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: K.onErrorContainer)),
-              const SizedBox(height: 2),
-              Text.rich(TextSpan(style: t.bodyMedium?.copyWith(color: K.onSurfaceVariant), children: const [
-                TextSpan(text: 'Call the National Scam Response Centre at '),
-                TextSpan(text: '997', style: TextStyle(fontWeight: FontWeight.w800, color: K.error)),
-                TextSpan(text: ' straight away. Open 24 hours. Tap to call.'),
-              ])),
-            ]),
-          ),
+          Expanded(child: Text('Just lost money? Call 997', style: t.titleMedium?.copyWith(fontWeight: FontWeight.w600, color: K.onErrorContainer))),
+          const Icon(Icons.chevron_right_rounded, color: K.onErrorContainer),
         ]),
       ),
     ]);
@@ -665,7 +630,7 @@ class _ReportTabState extends State<ReportTab> {
                 child: Container(
                   width: 80,
                   height: 80,
-                  decoration: const BoxDecoration(color: K.primary, shape: BoxShape.circle),
+                  decoration: const BoxDecoration(color: K.navy, shape: BoxShape.circle),
                   child: const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 44),
                 ),
               ),
@@ -792,7 +757,7 @@ class _Header extends StatelessWidget {
   const _Header({required this.title, required this.onBack, this.onClose, this.onDiscard});
   @override
   Widget build(BuildContext context) => Padding(
-        // The app bar above already has the back arrow (it calls the same
+        // The phone's back gesture goes back a step (it calls the same
         // handler), so this bar only names the step and offers close.
         padding: const EdgeInsets.fromLTRB(20, 4, 4, 4),
         child: Row(children: [
