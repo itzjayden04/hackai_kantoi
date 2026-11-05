@@ -364,7 +364,8 @@
     };
     const sec = $('#s-try');
     const chips = $$('.chip', sec), cap = $('#try-cap');
-    const empty = $('.p-empty', sec), input = $('.p-input', sec), run = $('.p-run', sec), res = $('.p-result', sec);
+    const input = $('.k-input', sec), home = $('.k-home', sec), goBtn = $('.k-go', sec);
+    const run = $('.p-run', sec), res = $('.p-result', sec);
     const steps = $$('.p-steps span', sec), bar = $('.p-bar i', sec), scroller = $('.phone-scroll', sec);
     const toast = $('.r-toast', sec);
     let token = 0;
@@ -372,13 +373,17 @@
     async function go(key) {
       const s = S[key], my = ++token;
       chips.forEach(c => c.classList.toggle('active', c.dataset.sample === key));
-      empty.hidden = true; res.hidden = true; toast.hidden = true;
-      input.hidden = false; run.hidden = false;
-      $('.p-from', input).textContent = s.from;
-      const pt = $('.p-text', input); pt.innerHTML = s.html; pt.classList.remove('lit');
+      res.hidden = true; toast.hidden = true; run.hidden = true; home.hidden = false;
+      const from = $('.p-from', input); from.textContent = s.from; from.hidden = false;
+      const pt = $('.p-text', input); pt.innerHTML = s.html; pt.classList.remove('lit', 'k-ph');
       steps.forEach(x => x.className = ''); bar.style.transition = 'none'; bar.style.width = '0';
       cap.textContent = 'Checking…';
       scroller.scrollTop = 0;
+      // Tap "Check with Kantoi AI", then the live pipeline replaces the home cards.
+      goBtn.classList.remove('press'); void goBtn.offsetWidth; goBtn.classList.add('press');
+      await wait(reduced ? 0 : 380);
+      if (my !== token) return;
+      home.hidden = true; run.hidden = false;
       const per = reduced ? 60 : 330;
       for (let i = 0; i < steps.length; i++) {
         if (my !== token) return;
