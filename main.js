@@ -266,7 +266,8 @@
       nodes.forEach(n => n.classList.toggle('show', v >= +n.dataset.n + .15));
       edges.forEach(e => e.classList.toggle('show', v >= +e.dataset.e));
       lines.forEach(l => l.classList.toggle('show', v >= +l.dataset.l + .1));
-      tlog.classList.toggle('done', v >= 6.5);
+      const done = v >= 6.6;
+      if (done !== tlog.classList.contains('done')) { tlog.classList.toggle('done', done); $('.ag-state', tlog).textContent = done ? 'verdict' : 'at work'; }
     });
 
     const info = [

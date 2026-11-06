@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,500,1,0&display=block">
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
 
@@ -413,8 +413,8 @@
 <section class="slide dark trace" id="s-trace" data-label="Trace" data-pin="trace" data-steps="7">
   <div class="wrap trace-wrap">
     <div class="trace-head">
-      <p class="eyebrow">Trace</p>
-      <h2>Who's behind it? The map grows as each lookup returns.</h2>
+      <p class="eyebrow">Trace · Agentic AI</p>
+      <h2>Who's behind it? An AI agent investigates.</h2>
     </div>
     <div class="trace-grid">
       <div class="graph-box">
@@ -452,25 +452,31 @@
         </aside>
         <p class="graph-hint"><span class="ms">touch_app</span>Click any node.</p>
       </div>
-      <div class="tlog card-dark" aria-label="Trace log">
-        <div class="tlog-head"><span class="ms">terminal</span>Trace log</div>
-        <ol>
-          <li data-l="0"><time>12:04:00</time>Start: link from SMS</li>
-          <li data-l="1"><time>12:04:01</time>Following redirect… 1 hop</li>
-          <li data-l="2"><time>12:04:01</time>DNS lookup… RDAP: registered 3 days ago</li>
-          <li data-l="3"><time>12:04:02</time>Hosting company and country found</li>
-          <li data-l="4"><time>12:04:02</time>Certificate logs: issued this week</li>
-          <li data-l="5"><time>12:04:03</time>Look-alike: imitates a courier brand</li>
-          <li data-l="6"><time>12:04:04</time>Matches earlier case "Parcel-fee campaign"</li>
-        </ol>
-        <div class="tlog-foot">
-          <span class="tchip"><span class="ms">picture_as_pdf</span>Police PDF</span>
-          <span class="tchip"><span class="ms">travel_explore</span>Public scam reports</span>
-          <span class="tchip"><span class="ms">account_balance</span>Semak Mule</span>
+      <div class="tlog card-dark" aria-label="AI investigator">
+        <div class="tlog-head"><span class="ms">psychology</span>AI investigator<span class="ag-state">at work</span></div>
+        <div class="ag-feed">
+          <ol>
+            <li data-l="0"><div class="ag-step"><span class="ms">inbox</span><b>Got the item</b><time>12:04:00</time></div><p class="ag-res">1 lead: a short link in an SMS. Personal details masked.</p></li>
+            <li data-l="1"><div class="ag-step"><span class="ms">alt_route</span><b>Follow the link</b><time>12:04:01</time></div><p class="ag-why">“Short links hide where they go, so I follow it first.”</p><p class="ag-res">Ends at poslaju-fee.example</p></li>
+            <li data-l="2"><div class="ag-step"><span class="ms">event</span><b>Check registration</b><time>12:04:01</time></div><p class="ag-why">“A courier name on an unknown site. How old is it?”</p><p class="ag-res"><span class="bad-t">Registered 3 days ago</span></p></li>
+            <li data-l="3"><div class="ag-step"><span class="ms">dns</span><b>Check servers and hosting</b><time>12:04:02</time></div><p class="ag-why">“A brand-new site: who hosts it, and where?”</p><p class="ag-res">Hosting company and country found</p></li>
+            <li data-l="4"><div class="ag-step"><span class="ms">verified_user</span><b>Check certificates</b><time>12:04:02</time></div><p class="ag-why">“Certificate logs can show more look-alike sites.”</p><p class="ag-res">Certificate issued this week</p></li>
+            <li data-l="5"><div class="ag-step"><span class="ms">chrome_reader_mode</span><b>Read what the site is for</b><time>12:04:03</time></div><p class="ag-why">“Does the page copy a courier?”</p><p class="ag-res"><span class="bad-t">Copies a courier brand and asks for a fee</span></p></li>
+            <li data-l="6"><div class="ag-step"><span class="ms">hub</span><b>Search the scam map</b><time>12:04:04</time></div><p class="ag-why">“Has Kantoi seen this pattern before?”</p><p class="ag-res">Matches the “Parcel-fee campaign”</p></li>
+            <li data-l="6.5" class="ag-final"><div class="ag-step"><span class="ms">gavel</span><b>Conclude</b><time>12:04:04</time></div><p class="ag-res"><span class="verdict-t">Very likely a scam · Parcel fee scam.</span> Don’t pay. Report it.</p></li>
+          </ol>
         </div>
+
       </div>
     </div>
-    <p class="trace-cap">Every node is a real public lookup. <b>Campaigns are named; people never are.</b> <span class="muted">Example data, fictional domain.</span></p>
+    <div class="tlog-foot" aria-label="AI investigator guardrails"><span class="guard-lbl">Guardrails</span>
+      <span class="tchip"><span class="ms">visibility</span>Read-only public lookups</span>
+      <span class="tchip"><span class="ms">alt_route</span>Only follows leads it found</span>
+      <span class="tchip"><span class="ms">block</span>Ignores instructions on scam pages</span>
+      <span class="tchip"><span class="ms">speed</span>Max 10 lookups</span>
+      <span class="tchip"><span class="ms">trending_up</span>Can raise risk, never lower it</span>
+    </div>
+    <p class="trace-cap">Gemini picks each lookup from what the last one found, says why, and stops when the evidence is clear. <b>Campaigns are named; people never are.</b> Exports a police PDF and links to Semak Mule. <span class="muted">Example data, fictional domain.</span></p>
   </div>
 </section>
 
@@ -598,7 +604,7 @@
       <div class="arch-arrow"><span class="ms">arrow_forward</span><small>masked</small></div>
       <div class="arch-box">
         <span class="ms">cloud</span><b>Online, masked</b>
-        <div class="tchips"><span>Google Gemini (free tier)</span><span>DNS</span><span>RDAP / WHOIS</span><span>Certificate logs</span><span>Tranco</span><span>VirusTotal</span><span>Safe Browsing</span><span>URLhaus</span></div>
+        <div class="tchips"><span>Google Gemini (free tier)</span><span>Gemini function calling: AI investigator</span><span>DNS</span><span>RDAP / WHOIS</span><span>Certificate logs</span><span>Tranco</span><span>VirusTotal</span><span>Safe Browsing</span><span>URLhaus</span></div>
       </div>
       <div class="arch-arrow"><span class="ms">arrow_forward</span></div>
       <div class="arch-box">
@@ -677,6 +683,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="main.js?v=12"></script>
+<script src="main.js?v=14"></script>
 </body>
 </html>

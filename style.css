@@ -483,9 +483,9 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: .88em; backgro
 /* ---------- 7 Trace ---------- */
 .trace { padding: 64px 0 40px; background: radial-gradient(900px 500px at 70% 30%, #13224a 0%, var(--night) 65%); }
 .trace-head h2 { font-size: clamp(1.8rem, 3.4vw, 2.8rem); max-width: 28ch; }
-.trace-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 24px; margin-top: 26px; align-items: stretch; }
+.trace-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 24px; margin-top: 26px; align-items: stretch; }
 .graph-box { position: relative; background: rgba(19,28,46,.6); border: 1px solid var(--nightline); border-radius: var(--r); padding: 8px; }
-.graph { width: 100%; height: auto; display: block; max-height: calc(100vh - 330px); min-height: 260px; }
+.graph { width: 100%; height: auto; display: block; max-height: calc(100vh - 300px); min-height: 260px; }
 .edges path { fill: none; stroke: var(--bright); stroke-width: 2.5; stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset .7s var(--ease); }
 .edges path.faint { stroke: var(--amber); stroke-dasharray: .02 .02; opacity: 0; transition: opacity .6s; }
 .edges path.show { stroke-dashoffset: 0; }
@@ -506,18 +506,35 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: .88em; backgro
 .node-card .nc-body { color: var(--nightmuted); font-size: .92rem; }
 .nc-close { position: absolute; right: 8px; top: 8px; border: 0; background: none; color: var(--nightmuted); padding: 4px; }
 .graph-hint { position: absolute; left: 16px; bottom: 12px; font-size: .8rem; color: var(--nightmuted); display: flex; gap: 6px; align-items: center; }
-.tlog { padding: 16px 18px; display: flex; flex-direction: column; font-family: ui-monospace, Consolas, monospace; font-size: .85rem; }
-.tlog-head { font-family: Inter, sans-serif; font-weight: 600; color: var(--nightmuted); display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
-.tlog ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; flex: 1; align-content: start; }
-.tlog li { clip-path: inset(0 100% 0 0); transition: clip-path .6s steps(28); color: var(--nightink); }
-.tlog li.show { clip-path: inset(0 0 0 0); }
-.tlog time { color: var(--bright); margin-right: 10px; }
-.tlog-foot { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; font-family: Inter, sans-serif; }
-.tchip { display: inline-flex; gap: 6px; align-items: center; font-size: .78rem; font-weight: 600; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--nightline); color: var(--nightink); opacity: .35; transition: opacity .4s; }
-.tlog.done .tchip { opacity: 1; }
-.trace-cap { margin-top: 18px; color: var(--nightink); font-size: 1rem; }
+.tlog { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.tlog-head { font-weight: 600; color: var(--nightink); display: flex; gap: 8px; align-items: center; }
+.tlog-head > .ms { color: var(--bright); }
+.ag-state { margin-left: auto; font-size: .72rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: rgba(124,151,255,.16); color: var(--bright); animation: agPulse 1.4s ease-in-out infinite; }
+.tlog.done .ag-state { animation: none; background: rgba(220,38,38,.2); color: #FF9B9B; }
+@keyframes agPulse { 50% { opacity: .45; } }
+/* live feed: newest step at the bottom, older steps scroll up and fade out */
+.ag-feed { position: relative; flex: 1; min-height: 160px; }
+.ag-feed ol { list-style: none; padding: 0; margin: 0; position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 36px); mask-image: linear-gradient(to bottom, transparent 0, #000 36px); }
+.ag-feed li { display: none; flex: none; background: rgba(255,255,255,.03); border: 1px solid var(--nightline); border-radius: 12px; padding: 8px 11px; }
+.ag-feed li.show { display: block; animation: agIn .45s var(--ease); }
+@keyframes agIn { from { opacity: 0; transform: translateY(10px); } }
+.ag-step { display: flex; gap: 8px; align-items: center; font-size: .86rem; }
+.ag-step .ms { color: var(--bright); font-size: 1.1em; }
+.ag-step b { font-weight: 600; }
+.ag-step time { margin-left: auto; font-family: ui-monospace, Consolas, monospace; font-size: .72rem; color: var(--nightmuted); }
+.ag-why { font-size: .8rem; font-style: italic; color: var(--nightmuted); margin-top: 3px; }
+.ag-res { font-size: .8rem; color: var(--nightink); margin-top: 2px; }
+.bad-t, .verdict-t { color: #FF9B9B; font-weight: 600; }
+.verdict-t { font-weight: 800; }
+.ag-final { border-color: rgba(220,38,38,.55) !important; background: rgba(220,38,38,.12) !important; }
+.ag-final .ms { color: #FF9B9B; }
+.tlog-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 14px; }
+.guard-lbl { font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--bright); margin-right: 4px; }
+.tchip { display: inline-flex; gap: 5px; align-items: center; font-size: .72rem; font-weight: 600; padding: 5px 9px; border-radius: 999px; border: 1px solid var(--nightline); color: var(--nightink); background: rgba(255,255,255,.03); }
+.tchip .ms { color: #4ade80; font-size: 1.05em; }
+.trace-cap { margin-top: 10px; color: var(--nightink); font-size: 1rem; }
 .trace-cap .muted { font-size: .85rem; margin-left: 6px; }
-@media (max-width: 900px) { .trace-grid { grid-template-columns: 1fr; } .graph { max-height: none; } }
+@media (max-width: 900px) { .trace-grid { grid-template-columns: 1fr; } .graph { max-height: none; } .ag-feed { min-height: 420px; } }
 
 /* ---------- 8 Act ---------- */
 .act { background: linear-gradient(180deg, var(--surface), #FFF5F5); }
@@ -697,6 +714,6 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: .88em; backgro
 /* ---------- Short screens (laptops at 768 px tall) ---------- */
 @media (max-height: 820px) and (min-width: 900px) {
   .pipeline, .rel, .trace { padding: 28px 0 16px; }
-  .graph { max-height: calc(100vh - 340px); }
+  .graph { max-height: calc(100vh - 290px); }
   .demo { height: 100px; }
 }
